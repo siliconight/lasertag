@@ -306,8 +306,17 @@ func validate_map() -> bool:
 
 func _navigation_ready() -> bool:
 	var map_rid := get_world_3d().navigation_map
-	return NavigationServer3D.map_get_iteration_id(map_rid) > 0 \
-		and NavigationServer3D.map_get_regions(map_rid).size() > 0
+	if NavigationServer3D.map_get_iteration_id(map_rid) == 0 \
+			or NavigationServer3D.map_get_regions(map_rid).is_empty():
+		return false
+	# A region existing isn't enough — a 0-polygon or misplaced navmesh
+	# would pass the checks above and then fail every reachability test
+	# (first real-engine CI run failed exactly this way). Probe: the
+	# navmesh must actually cover the play space near the player spawn.
+	var probe := player_spawns[0].global_position \
+		if not player_spawns.is_empty() else global_position
+	var closest := NavigationServer3D.map_get_closest_point(map_rid, probe)
+	return closest.distance_to(probe) < 3.0
 
 func _spawn_can_reach(from_position: Vector3, to_position: Vector3) -> bool:
 	var map_rid := get_world_3d().navigation_map

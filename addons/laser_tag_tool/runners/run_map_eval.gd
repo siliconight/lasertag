@@ -124,7 +124,11 @@ func _run(harness: LT_MapEvalHarness, scenario: LT_TestScenario,
 			quit(2)
 
 ## Runtime-bake every NavigationRegion3D under root (for CI and greybox
-## levels that ship without a baked navmesh).
+## levels that ship without a baked navmesh). Parses source geometry
+## from the MAP ROOT using static colliders on the World layer —
+## region.bake_navigation_mesh() only parses the region's own children,
+## which are typically empty in a greybox (geometry lives elsewhere in
+## the scene), yielding a 0-polygon mesh.
 func _bake_navigation(map_root: Node) -> void:
 	var regions: Array[NavigationRegion3D] = []
 	_collect_regions(map_root, regions)
@@ -132,11 +136,24 @@ func _bake_navigation(map_root: Node) -> void:
 		print("[LT] --bake-nav: no NavigationRegion3D found")
 		return
 	for region in regions:
-		if region.navigation_mesh == null:
-			region.navigation_mesh = NavigationMesh.new()
-		region.bake_navigation_mesh(false)  # synchronous
-		print("[LT] Baked navmesh on %s (%d polygons)" % [
-			region.name, region.navigation_mesh.get_polygon_count()])
+		var nav_mesh := region.navigation_mesh
+		if nav_mesh == null:
+			nav_mesh = NavigationMesh.new()
+		nav_mesh.geometry_parsed_geometry_type = NavigationMesh.PARSED_GEOMETRY_STATIC_COLLIDERS
+		nav_mesh.geometry_collision_mask = 1  # World layer — collision is truth
+		nav_mesh.agent_radius = 0.4  # matches the pill capsule
+
+		var source := NavigationMeshSourceGeometryData3D.new()
+		NavigationServer3D.parse_source_geometry_data(nav_mesh, source, map_root)
+		NavigationServer3D.bake_from_source_geometry_data(nav_mesh, source)
+		region.navigation_mesh = nav_mesh
+
+		var polygons := nav_mesh.get_polygon_count()
+		if polygons == 0:
+			push_warning("[LT] Baked 0 polygons on %s — no static colliders on layer 1 under %s?" % [
+				region.name, map_root.name])
+		else:
+			print("[LT] Baked navmesh on %s (%d polygons)" % [region.name, polygons])
 	# Let the navigation map sync the freshly baked regions.
 	for i in 3:
 		await physics_frame

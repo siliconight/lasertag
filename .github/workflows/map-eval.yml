@@ -60,6 +60,7 @@ jobs:
         id: eval
         run: |
           set +e
+          set -o pipefail
           ~/godot/godot --headless --path . \
             -s res://addons/laser_tag_tool/runners/run_map_eval.gd -- \
             --map res://addons/laser_tag_tool/scenes/demo/LT_DemoGreybox.tscn \
