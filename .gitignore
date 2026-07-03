@@ -1,0 +1,4 @@
+.godot/
+*.tmp
+reports/generated/*
+!reports/generated/.gitkeep

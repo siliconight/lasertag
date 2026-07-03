@@ -1,0 +1,74 @@
+[gd_scene load_steps=10 format=3]
+
+[ext_resource type="Script" path="res://addons/laser_tag_tool/scripts/combat/LT_Health.gd" id="1_health"]
+[ext_resource type="Script" path="res://addons/laser_tag_tool/scripts/combat/LT_Shooter.gd" id="2_shooter"]
+[ext_resource type="Script" path="res://addons/laser_tag_tool/scripts/enemy/LT_EnemyBrain.gd" id="3_brain"]
+[ext_resource type="Script" path="res://addons/laser_tag_tool/scripts/enemy/LT_EnemyMovement.gd" id="4_movement"]
+[ext_resource type="Script" path="res://addons/laser_tag_tool/scripts/ui/LT_EnemyLabel.gd" id="5_label"]
+
+[sub_resource type="CapsuleShape3D" id="capsule_shape"]
+radius = 0.4
+height = 1.8
+
+[sub_resource type="CapsuleMesh" id="capsule_mesh"]
+radius = 0.4
+height = 1.8
+
+[sub_resource type="StandardMaterial3D" id="pill_material"]
+albedo_color = Color(1.0, 0.3, 0.25, 1.0)
+
+[sub_resource type="LabelSettings" id="label_settings"]
+font_size = 14
+outline_size = 4
+outline_color = Color(0, 0, 0, 1)
+
+[node name="LT_EnemyPill" type="CharacterBody3D" groups=["lt_enemy"]]
+collision_layer = 4
+collision_mask = 7
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.9, 0)
+shape = SubResource("capsule_shape")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.9, 0)
+mesh = SubResource("capsule_mesh")
+surface_material_override/0 = SubResource("pill_material")
+
+[node name="Marker3D_Eye" type="Marker3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.5, 0)
+
+[node name="Marker3D_Muzzle" type="Marker3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.3, -0.4)
+
+[node name="NavigationAgent3D" type="NavigationAgent3D" parent="."]
+path_desired_distance = 0.8
+target_desired_distance = 1.5
+
+[node name="LT_Health" type="Node" parent="."]
+script = ExtResource("1_health")
+max_health = 2
+
+[node name="LT_Shooter" type="Node" parent="."]
+script = ExtResource("2_shooter")
+muzzle = NodePath("../Marker3D_Muzzle")
+laser_range = 35.0
+hit_mask = 15
+
+[node name="LT_EnemyMovement" type="Node" parent="."]
+script = ExtResource("4_movement")
+body = NodePath("..")
+nav_agent = NodePath("../NavigationAgent3D")
+
+[node name="LT_EnemyBrain" type="Node" parent="."]
+script = ExtResource("3_brain")
+shooter = NodePath("../LT_Shooter")
+movement = NodePath("../LT_EnemyMovement")
+eye = NodePath("../Marker3D_Eye")
+
+[node name="LT_EnemyLabel" type="Label3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.2, 0)
+label_settings = SubResource("label_settings")
+script = ExtResource("5_label")
+brain = NodePath("../LT_EnemyBrain")
+health = NodePath("../LT_Health")

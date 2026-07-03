@@ -1,0 +1,63 @@
+[gd_scene load_steps=8 format=3]
+
+[ext_resource type="Script" path="res://addons/laser_tag_tool/scripts/combat/LT_Health.gd" id="1_health"]
+[ext_resource type="Script" path="res://addons/laser_tag_tool/scripts/combat/LT_Shooter.gd" id="2_shooter"]
+[ext_resource type="Script" path="res://addons/laser_tag_tool/scripts/player/LT_PlayerController.gd" id="3_controller"]
+[ext_resource type="Script" path="res://addons/laser_tag_tool/scripts/player/LT_BotPlayerController.gd" id="4_bot"]
+
+[sub_resource type="CapsuleShape3D" id="capsule_shape"]
+radius = 0.4
+height = 1.8
+
+[sub_resource type="CapsuleMesh" id="capsule_mesh"]
+radius = 0.4
+height = 1.8
+
+[sub_resource type="StandardMaterial3D" id="pill_material"]
+albedo_color = Color(0.25, 0.55, 1.0, 1.0)
+
+[node name="LT_PlayerPill" type="CharacterBody3D" groups=["lt_player"]]
+collision_layer = 2
+collision_mask = 7
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.9, 0)
+shape = SubResource("capsule_shape")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.9, 0)
+mesh = SubResource("capsule_mesh")
+surface_material_override/0 = SubResource("pill_material")
+
+[node name="Camera3D" type="Camera3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.6, 0)
+current = true
+
+[node name="Marker3D_Muzzle" type="Marker3D" parent="Camera3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.05, -0.3)
+
+[node name="NavigationAgent3D" type="NavigationAgent3D" parent="."]
+path_desired_distance = 0.8
+target_desired_distance = 1.0
+
+[node name="LT_Health" type="Node" parent="."]
+script = ExtResource("1_health")
+max_health = 5
+
+[node name="LT_Shooter" type="Node" parent="."]
+script = ExtResource("2_shooter")
+muzzle = NodePath("../Camera3D/Marker3D_Muzzle")
+laser_range = 60.0
+hit_mask = 15
+
+[node name="LT_PlayerController" type="Node" parent="."]
+script = ExtResource("3_controller")
+body = NodePath("..")
+camera = NodePath("../Camera3D")
+shooter = NodePath("../LT_Shooter")
+
+[node name="LT_BotPlayerController" type="Node" parent="."]
+script = ExtResource("4_bot")
+body = NodePath("..")
+shooter = NodePath("../LT_Shooter")
+nav_agent = NodePath("../NavigationAgent3D")

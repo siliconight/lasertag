@@ -1,0 +1,109 @@
+name: map-eval
+
+on: [push, pull_request]
+
+env:
+  GODOT_VERSION: "4.4.1"
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install gdtoolkit
+      - name: Parse all GDScript
+        run: find addons -name "*.gd" -print0 | xargs -0 gdparse
+      - name: Lint
+        run: gdlint addons
+
+  smoke-eval:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache Godot
+        id: cache-godot
+        uses: actions/cache@v4
+        with:
+          path: ~/godot
+          key: godot-${{ env.GODOT_VERSION }}-linux
+
+      - name: Download Godot
+        if: steps.cache-godot.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p ~/godot
+          curl -sL -o godot.zip \
+            "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+          unzip -q godot.zip -d ~/godot
+          mv ~/godot/Godot_v${GODOT_VERSION}-stable_linux.x86_64 ~/godot/godot
+          chmod +x ~/godot/godot
+
+      - name: Create minimal project
+        run: |
+          cat > project.godot <<'EOF'
+          config_version=5
+
+          [application]
+          config/name="LT CI"
+
+          [editor_plugins]
+          enabled=PackedStringArray()
+          EOF
+
+      - name: Import resources
+        run: ~/godot/godot --headless --import || true
+
+      - name: Run demo greybox evaluation
+        id: eval
+        run: |
+          set +e
+          ~/godot/godot --headless --path . \
+            -s res://addons/laser_tag_tool/runners/run_map_eval.gd -- \
+            --map res://addons/laser_tag_tool/scenes/demo/LT_DemoGreybox.tscn \
+            --runs 3 --enemies 4 --max-run-time 60 \
+            --seed 42 --bake-nav --time-scale 8 \
+            --output user://reports/ci_eval.json | tee eval.log
+          code=$?
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          # 0 = PASS, 1 = WARN are both acceptable for the demo arena.
+          if [ $code -gt 1 ]; then
+            echo "::error::Evaluation graded FAIL/BROKEN (exit $code)"
+            exit 1
+          fi
+
+      - name: Validate report shape
+        run: |
+          REPORT="$HOME/.local/share/godot/app_userdata/LT CI/reports/ci_eval.json"
+          test -f "$REPORT" || { echo "::error::report not written"; exit 1; }
+          jq -e '.overall_score >= 0 and .grade != null and
+                 (.summary | has("runs")) and
+                 (.categories | has("traversal")) and
+                 (.findings | length > 0)' "$REPORT"
+          jq '{score: .overall_score, grade, summary}' "$REPORT"
+
+      - name: Determinism check (same seed, same shot counts)
+        run: |
+          ~/godot/godot --headless --path . \
+            -s res://addons/laser_tag_tool/runners/run_map_eval.gd -- \
+            --map res://addons/laser_tag_tool/scenes/demo/LT_DemoGreybox.tscn \
+            --runs 3 --enemies 4 --max-run-time 60 \
+            --seed 42 --bake-nav --time-scale 8 \
+            --output user://reports/ci_eval_2.json || true
+          D="$HOME/.local/share/godot/app_userdata/LT CI/reports"
+          jq -S '.summary | {shots_fired, runs}' "$D/ci_eval.json" > a.json
+          jq -S '.summary | {shots_fired, runs}' "$D/ci_eval_2.json" > b.json
+          diff a.json b.json && echo "deterministic ✓" || \
+            echo "::warning::seeded runs differed — physics nondeterminism, investigate"
+
+      - name: Upload report artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lt-eval-report
+          path: |
+            ~/.local/share/godot/app_userdata/LT CI/reports/*.json
+            ~/.local/share/godot/app_userdata/LT CI/reports/*.csv
+            eval.log

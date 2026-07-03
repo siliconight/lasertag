@@ -1,0 +1,9 @@
+# gdlint configuration for the Laser Tag Map Evaluation Tool.
+# The TDD mandates LT_-prefixed class names and `extends` before
+# `class_name`, so relax those two conventions.
+
+class-name: '(LT_)?([A-Z][a-zA-Z0-9]*)+'
+max-line-length: 120
+
+disable:
+  - class-definitions-order

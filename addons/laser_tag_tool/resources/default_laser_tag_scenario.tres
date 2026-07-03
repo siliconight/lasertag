@@ -1,0 +1,30 @@
+[gd_resource type="Resource" script_class="LT_TestScenario" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://addons/laser_tag_tool/resources/LT_TestScenario.gd" id="1_scenario"]
+
+[resource]
+script = ExtResource("1_scenario")
+run_count = 25
+max_run_time_seconds = 180.0
+player_health = 5
+enemy_health = 2
+player_count = 1
+enemy_count = 6
+player_laser_range = 60.0
+enemy_laser_range = 35.0
+enemy_fire_cooldown = 1.25
+enemy_reaction_delay_min = 0.25
+enemy_reaction_delay_max = 0.5
+enemy_sight_range = 35.0
+enemy_preferred_distance = 14.0
+first_contact_min_seconds = 3.0
+first_contact_max_seconds = 30.0
+min_reasonable_survival_seconds = 10.0
+use_random_spawn_permutations = true
+use_bot_players = true
+enable_debug_lasers = true
+record_debug_events = true
+fail_on_missing_player_spawn = true
+fail_on_missing_enemy_spawns = true
+fail_on_unreachable_spawns = true
+require_navigation = false
