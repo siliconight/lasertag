@@ -1,4 +1,4 @@
-[gd_scene load_steps=6 format=3]
+[gd_scene load_steps=12 format=3]
 
 [ext_resource type="PackedScene" path="res://addons/laser_tag_tool/scenes/LT_MapEvalHarness.tscn" id="1_harness"]
 
@@ -8,11 +8,29 @@ size = Vector3(40, 1, 40)
 [sub_resource type="BoxMesh" id="floor_mesh"]
 size = Vector3(40, 1, 40)
 
-[sub_resource type="BoxShape3D" id="block_shape"]
-size = Vector3(4, 3, 1)
+[sub_resource type="BoxShape3D" id="wall_ew_shape"]
+size = Vector3(40, 3, 1)
 
-[sub_resource type="BoxMesh" id="block_mesh"]
-size = Vector3(4, 3, 1)
+[sub_resource type="BoxMesh" id="wall_ew_mesh"]
+size = Vector3(40, 3, 1)
+
+[sub_resource type="BoxShape3D" id="wall_ns_shape"]
+size = Vector3(1, 3, 40)
+
+[sub_resource type="BoxMesh" id="wall_ns_mesh"]
+size = Vector3(1, 3, 40)
+
+[sub_resource type="BoxShape3D" id="bar14_shape"]
+size = Vector3(14, 3, 1)
+
+[sub_resource type="BoxMesh" id="bar14_mesh"]
+size = Vector3(14, 3, 1)
+
+[sub_resource type="BoxShape3D" id="cover_shape"]
+size = Vector3(3, 3, 3)
+
+[sub_resource type="BoxMesh" id="cover_mesh"]
+size = Vector3(3, 3, 3)
 
 [node name="LT_DemoGreybox" type="Node3D"]
 
@@ -28,81 +46,114 @@ shape = SubResource("floor_shape")
 mesh = SubResource("floor_mesh")
 
 [node name="Wall_N" type="StaticBody3D" parent="."]
-transform = Transform3D(10, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.5, -20)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.5, -20)
 collision_layer = 1
 collision_mask = 0
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="Wall_N"]
-shape = SubResource("block_shape")
+shape = SubResource("wall_ew_shape")
 
 [node name="MeshInstance3D" type="MeshInstance3D" parent="Wall_N"]
-mesh = SubResource("block_mesh")
+mesh = SubResource("wall_ew_mesh")
 
 [node name="Wall_S" type="StaticBody3D" parent="."]
-transform = Transform3D(10, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.5, 20)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.5, 20)
 collision_layer = 1
 collision_mask = 0
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="Wall_S"]
-shape = SubResource("block_shape")
+shape = SubResource("wall_ew_shape")
 
 [node name="MeshInstance3D" type="MeshInstance3D" parent="Wall_S"]
-mesh = SubResource("block_mesh")
+mesh = SubResource("wall_ew_mesh")
 
 [node name="Wall_E" type="StaticBody3D" parent="."]
-transform = Transform3D(0, 0, -1, 0, 1, 0, 10, 0, 0, 20, 1.5, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 20, 1.5, 0)
 collision_layer = 1
 collision_mask = 0
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="Wall_E"]
-shape = SubResource("block_shape")
+shape = SubResource("wall_ns_shape")
 
 [node name="MeshInstance3D" type="MeshInstance3D" parent="Wall_E"]
-mesh = SubResource("block_mesh")
+mesh = SubResource("wall_ns_mesh")
 
 [node name="Wall_W" type="StaticBody3D" parent="."]
-transform = Transform3D(0, 0, -1, 0, 1, 0, 10, 0, 0, -20, 1.5, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -20, 1.5, 0)
 collision_layer = 1
 collision_mask = 0
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="Wall_W"]
-shape = SubResource("block_shape")
+shape = SubResource("wall_ns_shape")
 
 [node name="MeshInstance3D" type="MeshInstance3D" parent="Wall_W"]
-mesh = SubResource("block_mesh")
+mesh = SubResource("wall_ns_mesh")
 
-[node name="Cover_A" type="StaticBody3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5, 1.5, -3)
+[node name="FrontCover" type="StaticBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.5, 12)
 collision_layer = 1
 collision_mask = 0
 
-[node name="CollisionShape3D" type="CollisionShape3D" parent="Cover_A"]
-shape = SubResource("block_shape")
+[node name="CollisionShape3D" type="CollisionShape3D" parent="FrontCover"]
+shape = SubResource("bar14_shape")
 
-[node name="MeshInstance3D" type="MeshInstance3D" parent="Cover_A"]
-mesh = SubResource("block_mesh")
+[node name="MeshInstance3D" type="MeshInstance3D" parent="FrontCover"]
+mesh = SubResource("bar14_mesh")
 
-[node name="Cover_B" type="StaticBody3D" parent="."]
-transform = Transform3D(0, 0, -1, 0, 1, 0, 1, 0, 0, 6, 1.5, 4)
+[node name="DividerL" type="StaticBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -11, 1.5, 0)
 collision_layer = 1
 collision_mask = 0
 
-[node name="CollisionShape3D" type="CollisionShape3D" parent="Cover_B"]
-shape = SubResource("block_shape")
+[node name="CollisionShape3D" type="CollisionShape3D" parent="DividerL"]
+shape = SubResource("bar14_shape")
 
-[node name="MeshInstance3D" type="MeshInstance3D" parent="Cover_B"]
-mesh = SubResource("block_mesh")
+[node name="MeshInstance3D" type="MeshInstance3D" parent="DividerL"]
+mesh = SubResource("bar14_mesh")
 
-[node name="Cover_C" type="StaticBody3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.5, -10)
+[node name="DividerR" type="StaticBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 11, 1.5, 0)
 collision_layer = 1
 collision_mask = 0
 
-[node name="CollisionShape3D" type="CollisionShape3D" parent="Cover_C"]
-shape = SubResource("block_shape")
+[node name="CollisionShape3D" type="CollisionShape3D" parent="DividerR"]
+shape = SubResource("bar14_shape")
 
-[node name="MeshInstance3D" type="MeshInstance3D" parent="Cover_C"]
-mesh = SubResource("block_mesh")
+[node name="MeshInstance3D" type="MeshInstance3D" parent="DividerR"]
+mesh = SubResource("bar14_mesh")
+
+[node name="CoverN1" type="StaticBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -8, 1.5, -8)
+collision_layer = 1
+collision_mask = 0
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="CoverN1"]
+shape = SubResource("cover_shape")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="CoverN1"]
+mesh = SubResource("cover_mesh")
+
+[node name="CoverN2" type="StaticBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 8, 1.5, -8)
+collision_layer = 1
+collision_mask = 0
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="CoverN2"]
+shape = SubResource("cover_shape")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="CoverN2"]
+mesh = SubResource("cover_mesh")
+
+[node name="CoverMid" type="StaticBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.5, -6)
+collision_layer = 1
+collision_mask = 0
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="CoverMid"]
+shape = SubResource("cover_shape")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="CoverMid"]
+mesh = SubResource("cover_mesh")
 
 [node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
 transform = Transform3D(0.707, -0.5, 0.5, 0, 0.707, 0.707, -0.707, -0.5, 0.5, 0, 10, 0)
@@ -114,35 +165,35 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.1, 16)
 [node name="LT_EnemySpawnPoints" type="Node3D" parent="."]
 
 [node name="LT_EnemySpawn_01" type="Marker3D" parent="LT_EnemySpawnPoints"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -12, 0.1, -14)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -14, 0.1, -15)
 
 [node name="LT_EnemySpawn_02" type="Marker3D" parent="LT_EnemySpawnPoints"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 12, 0.1, -14)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 14, 0.1, -15)
 
 [node name="LT_EnemySpawn_03" type="Marker3D" parent="LT_EnemySpawnPoints"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.1, -16)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -16, 0.1, -8)
 
 [node name="LT_EnemySpawn_04" type="Marker3D" parent="LT_EnemySpawnPoints"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -8, 0.1, 2)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 16, 0.1, -8)
 
 [node name="LT_PlayerRoutePoints" type="Node3D" parent="."]
 
 [node name="LT_Route_01" type="Marker3D" parent="LT_PlayerRoutePoints"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -8, 0.1, 8)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 10, 0.1, 10)
 
 [node name="LT_Route_02" type="Marker3D" parent="LT_PlayerRoutePoints"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 8, 0.1, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2, 0.1, -1)
 
 [node name="LT_Route_03" type="Marker3D" parent="LT_PlayerRoutePoints"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.1, -14)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -8, 0.1, -14)
 
 [node name="LT_CoverTestPoints" type="Node3D" parent="."]
 
 [node name="LT_Cover_01" type="Marker3D" parent="LT_CoverTestPoints"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5, 0.1, -1)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 7, 0.1, 6)
 
 [node name="LT_Cover_02" type="Marker3D" parent="LT_CoverTestPoints"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4, 0.1, 4)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -7, 0.1, 6)
 
 [node name="NavigationRegion3D" type="NavigationRegion3D" parent="."]
 
