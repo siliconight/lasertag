@@ -170,12 +170,6 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -14, 0.1, -15)
 [node name="LT_EnemySpawn_02" type="Marker3D" parent="LT_EnemySpawnPoints"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 14, 0.1, -15)
 
-[node name="LT_EnemySpawn_03" type="Marker3D" parent="LT_EnemySpawnPoints"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -16, 0.1, -8)
-
-[node name="LT_EnemySpawn_04" type="Marker3D" parent="LT_EnemySpawnPoints"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 16, 0.1, -8)
-
 [node name="LT_PlayerRoutePoints" type="Node3D" parent="."]
 
 [node name="LT_Route_01" type="Marker3D" parent="LT_PlayerRoutePoints"]

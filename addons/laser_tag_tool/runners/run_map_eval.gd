@@ -217,7 +217,7 @@ func _find_harness(node: Node) -> LT_MapEvalHarness:
 	if node is LT_MapEvalHarness:
 		return node
 	for child in node.get_children():
-		var found := _find_harness(child)
+		var found: LT_MapEvalHarness = _find_harness(child)
 		if found != null:
 			return found
 	return null

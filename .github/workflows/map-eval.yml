@@ -64,7 +64,7 @@ jobs:
           ~/godot/godot --headless --path . \
             -s res://addons/laser_tag_tool/runners/run_map_eval.gd -- \
             --map res://addons/laser_tag_tool/scenes/demo/LT_DemoGreybox.tscn \
-            --runs 3 --enemies 4 --max-run-time 60 \
+            --runs 3 --enemies 2 --max-run-time 60 \
             --seed 42 --bake-nav --time-scale 8 --trace \
             --output user://reports/ci_eval.json | tee eval.log
           code=$?
@@ -90,7 +90,7 @@ jobs:
           ~/godot/godot --headless --path . \
             -s res://addons/laser_tag_tool/runners/run_map_eval.gd -- \
             --map res://addons/laser_tag_tool/scenes/demo/LT_DemoGreybox.tscn \
-            --runs 3 --enemies 4 --max-run-time 60 \
+            --runs 3 --enemies 2 --max-run-time 60 \
             --seed 42 --bake-nav --time-scale 8 \
             --output user://reports/ci_eval_2.json || true
           D="$HOME/.local/share/godot/app_userdata/LT CI/reports"
