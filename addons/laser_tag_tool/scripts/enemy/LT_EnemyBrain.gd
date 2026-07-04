@@ -33,6 +33,17 @@ var _body: CharacterBody3D
 
 func _ready() -> void:
 	_body = get_parent() as CharacterBody3D
+	# Re-resolve node references defensively. Typed @export NodePaths in the
+	# pill .tscn can load as null under a version-mismatched scene (authored
+	# in a newer Godot, evaluated in CI on 4.4.1), which silently leaves the
+	# enemy inert. Resolve from the pill subtree so it's never dependent on
+	# the scene's stored NodePaths surviving.
+	if movement == null and _body != null and _body.has_node("LT_EnemyMovement"):
+		movement = _body.get_node("LT_EnemyMovement")
+	if shooter == null and _body != null and _body.has_node("LT_Shooter"):
+		shooter = _body.get_node("LT_Shooter")
+	if eye == null and _body != null and _body.has_node("Marker3D_Eye"):
+		eye = _body.get_node("Marker3D_Eye")
 	if movement != null:
 		movement.stuck_detected.connect(_on_stuck)
 	if _body != null and _body.has_node("LT_Health"):
@@ -84,11 +95,6 @@ func _physics_process(delta: float) -> void:
 			get_tree().call_group(LT_Const.GROUP_METRICS, "record_event",
 				"LineOfSightLost", {"source": _source_name(), "target": target.name})
 		state = State.SEEK
-		# DIAGNOSTIC (temporary): fires once per enemy on first SEEK.
-		if not has_meta("_lt_seek_logged"):
-			set_meta("_lt_seek_logged", true)
-			print("[LT brain] %s SEEK movement_null=%s target=%s target_pos=%s" % [
-				_source_name(), movement == null, target.name, target.global_position])
 		if movement != null:
 			movement.set_destination(target.global_position)
 

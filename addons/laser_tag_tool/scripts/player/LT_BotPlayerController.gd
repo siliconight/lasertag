@@ -43,6 +43,10 @@ func _ready() -> void:
 		body = get_parent()
 	if nav_agent == null and body != null and body.has_node("NavigationAgent3D"):
 		nav_agent = body.get_node("NavigationAgent3D")
+	# See LT_EnemyBrain._ready(): typed @export NodePaths can load null under
+	# a version-mismatched scene; re-resolve so the bot can actually fire.
+	if shooter == null and body != null and body.has_node("LT_Shooter"):
+		shooter = body.get_node("LT_Shooter")
 	if body != null:
 		_stuck_anchor = body.global_position
 		if body.has_node("LT_Health"):
@@ -68,11 +72,6 @@ func _physics_process(delta: float) -> void:
 
 	var enemy := _find_visible_enemy()
 	if enemy != null:
-		# DIAGNOSTIC (temporary): fires once if the bot thinks it sees a target.
-		if not has_meta("_lt_bot_saw_enemy"):
-			set_meta("_lt_bot_saw_enemy", true)
-			print("[LT bot] %s SEES ENEMY %s — stopping to fire (not advancing route)" % [
-				body.name, enemy.name])
 		_stop_horizontal()
 		_face_point(enemy.global_position)
 		if _fire_timer <= 0.0:
@@ -153,13 +152,6 @@ func _advance_route(_delta: float) -> void:
 
 	var flat := _next_path_point() - body.global_position
 	flat.y = 0.0
-	# DIAGNOSTIC (temporary): fires once on first route-advance frame.
-	if not has_meta("_lt_bot_logged"):
-		set_meta("_lt_bot_logged", true)
-		print("[LT bot] %s advance use_nav=%s has_target=%s next=%s pos=%s flat_len=%.2f route=%d/%d" % [
-			body.name, use_navigation, has_meta("lt_direct_target"),
-			_next_path_point(), body.global_position, flat.length(),
-			_route_index, route_points.size()])
 	if flat.length() > 0.05:
 		var direction := flat.normalized()
 		body.velocity.x = direction.x * move_speed
