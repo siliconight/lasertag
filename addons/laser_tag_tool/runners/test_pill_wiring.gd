@@ -3,9 +3,9 @@ extends SceneTree
 ##
 ## Guards the CI-BROKEN bug where typed @export NodePaths in the pill
 ## .tscn files loaded as null under a version-mismatched scene, leaving
-## enemies inert (movement/eye null) and the bot unable to fire (shooter
-## null). Each pill now re-resolves its own references in _ready(); this
-## test fails loudly if that ever stops working.
+## enemies inert (movement/eye null) and nobody able to fire (shooter or
+## muzzle null). Each pill now re-resolves its own references in _ready();
+## this test fails loudly if that ever stops working.
 ##
 ## Usage:
 ##   godot --headless --path . \
@@ -25,36 +25,40 @@ func _run() -> void:
 	_build_floor()
 
 	# --- Enemy pill wiring ---
-	var enemy := ENEMY_PILL.instantiate()
+	var enemy: CharacterBody3D = ENEMY_PILL.instantiate()
 	root.add_child(enemy)
 	enemy.global_position = Vector3(0.0, 0.5, 0.0)
 	await physics_frame
 
 	var brain: LT_EnemyBrain = enemy.get_node("LT_EnemyBrain")
 	var movement: LT_EnemyMovement = enemy.get_node("LT_EnemyMovement")
+	var enemy_shooter: LT_Shooter = enemy.get_node("LT_Shooter")
 	_check(brain.movement != null, "enemy brain.movement resolved")
 	_check(brain.shooter != null, "enemy brain.shooter resolved")
 	_check(brain.eye != null, "enemy brain.eye resolved")
+	_check(enemy_shooter.muzzle != null, "enemy shooter.muzzle resolved")
 
 	# --- Enemy actually moves toward a destination in fallback mode ---
 	brain.set_physics_process(false)  # keep the brain from clearing the target
 	movement.use_navigation = false
-	var start := enemy.global_position
+	var start: Vector3 = enemy.global_position
 	movement.set_destination(start + Vector3(10.0, 0.0, 0.0))
 	for _i in 40:
 		await physics_frame
-	var moved := enemy.global_position - start
+	var moved: Vector3 = enemy.global_position - start
 	moved.y = 0.0
 	_check(moved.length() > 1.0,
 		"enemy walked toward destination (moved %.2fm)" % moved.length())
 
 	# --- Bot pill wiring ---
-	var bot_pill := PLAYER_PILL.instantiate()
+	var bot_pill: CharacterBody3D = PLAYER_PILL.instantiate()
 	root.add_child(bot_pill)
 	bot_pill.global_position = Vector3(5.0, 0.5, 0.0)
 	await physics_frame
 	var bot: LT_BotPlayerController = bot_pill.get_node("LT_BotPlayerController")
+	var bot_shooter: LT_Shooter = bot_pill.get_node("LT_Shooter")
 	_check(bot.shooter != null, "bot shooter resolved")
+	_check(bot_shooter.muzzle != null, "bot shooter.muzzle resolved")
 
 	print("")
 	if _failures == 0:

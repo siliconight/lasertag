@@ -23,6 +23,15 @@ func _ready() -> void:
 		var parent := get_parent()
 		if parent is CollisionObject3D:
 			owner_body = parent
+	# Typed @export NodePaths can load null under a version-mismatched scene
+	# (see LT_EnemyBrain._ready()); re-resolve the muzzle so fire() works.
+	# The muzzle sits directly under the pill (enemies) or under the camera
+	# (players), so try both known layouts.
+	if muzzle == null and owner_body != null:
+		if owner_body.has_node("Marker3D_Muzzle"):
+			muzzle = owner_body.get_node("Marker3D_Muzzle")
+		elif owner_body.has_node("Camera3D/Marker3D_Muzzle"):
+			muzzle = owner_body.get_node("Camera3D/Marker3D_Muzzle")
 
 func fire(direction: Vector3) -> LT_ShotResult:
 	var shot := LT_ShotResult.new()
