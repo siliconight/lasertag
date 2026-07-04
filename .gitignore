@@ -2,3 +2,9 @@
 *.tmp
 reports/generated/*
 !reports/generated/.gitkeep
+
+# Godot-generated (do not commit)
+.godot/
+*.uid
+*.import
+project.godot
