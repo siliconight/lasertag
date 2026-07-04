@@ -127,6 +127,10 @@ func _advance_route(_delta: float) -> void:
 	if route_points.is_empty():
 		return
 
+	# Path updates happen INSIDE get_next_path_position() — call it before
+	# is_navigation_finished() so the finished-check is meaningful.
+	_next_path_point()
+
 	if _nav_finished():
 		if _seeking_cover:
 			_seeking_cover = false
@@ -142,8 +146,7 @@ func _advance_route(_delta: float) -> void:
 			return
 		_go_to_current_route_point()
 
-	var next_point := _next_path_point()
-	var flat := next_point - body.global_position
+	var flat := _next_path_point() - body.global_position
 	flat.y = 0.0
 	if flat.length() > 0.05:
 		var direction := flat.normalized()
@@ -221,3 +224,17 @@ func _update_stuck(delta: float) -> void:
 func _stop_horizontal() -> void:
 	body.velocity.x = 0.0
 	body.velocity.z = 0.0
+
+## One-line diagnostic for --trace runs.
+func debug_status() -> String:
+	if body == null:
+		return "bot: NO BODY"
+	return "bot %s pos=%s vel=%s completed=%s route=%d/%d nav_fin=%s next=%s" % [
+		body.name, _fmt(body.global_position),
+		_fmt(body.velocity), _completed,
+		_route_index, route_points.size(),
+		_nav_finished(), _fmt(_next_path_point()),
+	]
+
+func _fmt(v: Vector3) -> String:
+	return "(%.1f,%.1f,%.1f)" % [v.x, v.y, v.z]

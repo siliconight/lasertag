@@ -61,6 +61,35 @@ var _live_pills: Array[Node] = []
 var _headless: bool = false
 var _last_score: Dictionary = {}
 
+## --trace diagnostics
+var trace_enabled: bool = false
+var _physics_ticks: int = 0
+var _trace_marks: Array[float] = []
+
+func _physics_process(_delta: float) -> void:
+	_physics_ticks += 1
+
+func _process(_delta: float) -> void:
+	if not trace_enabled or mode != Mode.HEADLESS_BOT or not run_state.is_running:
+		return
+	if _trace_marks.is_empty():
+		return
+	if run_state.elapsed_seconds >= _trace_marks[0]:
+		_trace_marks.pop_front()
+		_print_trace_snapshot()
+
+func _print_trace_snapshot() -> void:
+	print("[LT trace] t=%.1fs run=%d physics_ticks=%d nav=%s" % [
+		run_state.elapsed_seconds, run_state.run_id, _physics_ticks, navigation_available])
+	for player in registry.get_all_players():
+		var bot := player.get_node_or_null("LT_BotPlayerController")
+		if bot != null:
+			print("[LT trace]   " + bot.debug_status())
+	for enemy in get_tree().get_nodes_in_group(LT_Const.GROUP_ENEMY):
+		var brain := enemy.get_node_or_null("LT_EnemyBrain")
+		if brain != null:
+			print("[LT trace]   " + brain.debug_status())
+
 func _ready() -> void:
 	add_to_group(LT_Const.GROUP_HARNESS)
 	_headless = DisplayServer.get_name() == "headless"
@@ -561,6 +590,8 @@ func run_evaluation(eval_scenario: LT_TestScenario) -> Dictionary:
 			seed(scenario.random_seed + i)
 		_clear_pills()
 		start_run(scenario.use_bot_players)
+		if trace_enabled and i == 0:
+			_trace_marks = [0.5, 2.0, 5.0, 10.0, 20.0]
 		await run_state.run_ended
 		metrics.end_run(run_state.end_reason_name())
 		print("[LT] run %d/%d ended: %s (%.1fs)" % [

@@ -150,3 +150,14 @@ func _on_died() -> void:
 
 func _source_name() -> String:
 	return _body.name if _body != null else name
+
+## One-line diagnostic for --trace runs.
+func debug_status() -> String:
+	if _body == null:
+		return "enemy %s: NO BODY" % name
+	var target_name := target.name if target != null else "none"
+	var dist := _body.global_position.distance_to(target.global_position) if target != null else -1.0
+	return "enemy %s pos=(%.1f,%.1f,%.1f) state=%s target=%s dist=%.1f los=%s fire_t=%.2f" % [
+		_body.name, _body.global_position.x, _body.global_position.y, _body.global_position.z,
+		state_name(), target_name, dist, had_los_last_frame, fire_timer,
+	]

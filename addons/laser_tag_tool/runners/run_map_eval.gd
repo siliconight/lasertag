@@ -57,6 +57,8 @@ func _initialize() -> void:
 		scenario.enemies_enabled = false
 		push_warning("run_map_eval: --no-enemies — combat categories will score 0; traversal-only run")
 
+	var trace := args.has("trace")
+
 	var output_path: String = args.get("output",
 		"user://reports/%s_eval.json" % map_path.get_file().get_basename())
 
@@ -83,6 +85,9 @@ func _initialize() -> void:
 		map_root.add_child(harness)
 	else:
 		harness.auto_start_manual = false
+	harness.trace_enabled = trace
+	if trace:
+		print("[LT] Trace enabled — snapshots during run 1")
 
 	_run.call_deferred(harness, scenario, output_path, map_path, scenario_path, args)
 
