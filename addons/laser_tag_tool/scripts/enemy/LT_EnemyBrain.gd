@@ -84,6 +84,11 @@ func _physics_process(delta: float) -> void:
 			get_tree().call_group(LT_Const.GROUP_METRICS, "record_event",
 				"LineOfSightLost", {"source": _source_name(), "target": target.name})
 		state = State.SEEK
+		# DIAGNOSTIC (temporary): fires once per enemy on first SEEK.
+		if not has_meta("_lt_seek_logged"):
+			set_meta("_lt_seek_logged", true)
+			print("[LT brain] %s SEEK movement_null=%s target=%s target_pos=%s" % [
+				_source_name(), movement == null, target.name, target.global_position])
 		if movement != null:
 			movement.set_destination(target.global_position)
 

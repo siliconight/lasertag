@@ -63,6 +63,12 @@ func _physics_process(delta: float) -> void:
 		var next_point := _next_point()
 		var flat := next_point - body.global_position
 		flat.y = 0.0
+		# DIAGNOSTIC (temporary): fires once per enemy on first move attempt.
+		if not has_meta("_lt_move_logged"):
+			set_meta("_lt_move_logged", true)
+			print("[LT move] %s use_nav=%s has_target=%s next=%s pos=%s flat_len=%.2f" % [
+				body.name, use_navigation, has_meta("lt_direct_target"),
+				next_point, body.global_position, flat.length()])
 		if flat.length() > 0.05:
 			var direction := flat.normalized()
 			body.velocity.x = direction.x * move_speed
