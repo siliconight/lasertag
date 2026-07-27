@@ -19,6 +19,38 @@ jobs:
       - name: Lint
         run: gdlint addons
 
+      # Two files carry this tool's version and they answer different callers:
+      # plugin.cfg is what Godot reads when it loads the addon, VERSION is what
+      # the factory manifest reads when it checks the certified set. A mirror
+      # nobody enforces drifts -- that is how laser_tag reported UNKNOWN for as
+      # long as it did. Enforce it here, in the repo that owns both files.
+      - name: VERSION and plugin.cfg agree
+        run: |
+          python - <<'PY'
+          import pathlib, re, sys
+          root = pathlib.Path(".")
+          version_file = root / "VERSION"
+          plugin_cfg = root / "addons/laser_tag_tool/plugin.cfg"
+
+          def semver(text, where):
+              m = re.search(r"\d+\.\d+\.\d+", text)
+              if not m:
+                  sys.exit(f"::error::no semver found in {where}")
+              return m.group(0)
+
+          v = semver(version_file.read_text(encoding="utf-8"), version_file)
+          cfg = plugin_cfg.read_text(encoding="utf-8")
+          line = next((ln for ln in cfg.splitlines()
+                       if ln.strip().startswith("version=")), "")
+          p = semver(line, f"{plugin_cfg} version= line")
+
+          if v != p:
+              sys.exit(f"::error::VERSION says {v}, plugin.cfg says {p} -- "
+                       "bump both or the factory certifies a version Godot "
+                       "does not load")
+          print(f"laser_tag {v} (VERSION == plugin.cfg)")
+          PY
+
   smoke-eval:
     runs-on: ubuntu-latest
     steps:
