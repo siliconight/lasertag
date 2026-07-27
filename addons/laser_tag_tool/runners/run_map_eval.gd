@@ -128,6 +128,11 @@ func _run(harness: LT_MapEvalHarness, scenario: LT_TestScenario,
 		_:
 			quit(2)
 
+## How long to wait for a bake the *map* started before taking the region over.
+## A site-sized bake finishes in well under a second; this is a ceiling, not an
+## expectation, and hitting it is reported rather than waited out forever.
+const BAKE_HANDOVER_FRAMES := 240
+
 ## Runtime-bake every NavigationRegion3D under root (for CI and greybox
 ## levels that ship without a baked navmesh). Parses source geometry
 ## from the MAP ROOT using static colliders on the World layer —
@@ -141,24 +146,60 @@ func _bake_navigation(map_root: Node) -> void:
 		print("[LT] --bake-nav: no NavigationRegion3D found")
 		return
 	for region in regions:
-		var nav_mesh := region.navigation_mesh
-		if nav_mesh == null:
-			nav_mesh = NavigationMesh.new()
+		# A map's own _ready() may have kicked off region.bake_navigation_mesh(),
+		# which is threaded and returns immediately. Let it land before taking
+		# the region over, rather than racing it.
+		var waited := 0
+		while region.is_baking() and waited < BAKE_HANDOVER_FRAMES:
+			await physics_frame
+			waited += 1
+		if region.is_baking():
+			push_warning(("[LT] %s was still baking after %d frames; the map "
+				+ "started a bake this runner cannot wait out. Baking a "
+				+ "separate mesh anyway — the map's result is discarded.") % [
+				region.name, BAKE_HANDOVER_FRAMES])
+
+		# Bake into a FRESH resource, never the region's own. Baking a
+		# NavigationMesh that is already baking is refused outright, and the
+		# refusal leaves the polygon count at 0 — a refused bake and a map with
+		# no collision at all print the identical number. Every parameter below
+		# is overridden anyway, so reusing the region's resource bought nothing
+		# but that race. A new NavigationMesh also carries the engine-default
+		# cell_size/cell_height, which is what the navigation map itself uses,
+		# so the rasterization-mismatch warning goes with it.
+		var nav_mesh := NavigationMesh.new()
 		nav_mesh.geometry_parsed_geometry_type = NavigationMesh.PARSED_GEOMETRY_STATIC_COLLIDERS
 		nav_mesh.geometry_collision_mask = 1  # World layer — collision is truth
 		nav_mesh.agent_radius = 0.4  # matches the pill capsule
 
 		var source := NavigationMeshSourceGeometryData3D.new()
 		NavigationServer3D.parse_source_geometry_data(nav_mesh, source, map_root)
+
+		# "Found no geometry" and "found geometry that bakes to nothing" are
+		# different faults with different fixes, and the old message guessed at
+		# the first while the truth was usually neither. Say which one happened.
+		if not source.has_data():
+			push_warning(("[LT] Nothing to bake for %s: parsing %s found no "
+				+ "static colliders on layer 1. Check that the map's geometry "
+				+ "carries collision bodies, not just visual meshes.") % [
+				region.name, map_root.name])
+			continue
+
 		NavigationServer3D.bake_from_source_geometry_data(nav_mesh, source)
 		region.navigation_mesh = nav_mesh
 
 		var polygons := nav_mesh.get_polygon_count()
 		if polygons == 0:
-			push_warning("[LT] Baked 0 polygons on %s — no static colliders on layer 1 under %s?" % [
-				region.name, map_root.name])
+			var vertices := source.get_vertices().size() / 3
+			push_warning(("[LT] Baked 0 polygons on %s from %d source vertices "
+				+ "under %s. Geometry was found, so this is not missing "
+				+ "collision: nothing in it is walkable at agent_radius %.2f / "
+				+ "agent_height %.2f / agent_max_slope %.1f°.") % [
+				region.name, vertices, map_root.name, nav_mesh.agent_radius,
+				nav_mesh.agent_height, nav_mesh.agent_max_slope])
 		else:
-			print("[LT] Baked navmesh on %s (%d polygons)" % [region.name, polygons])
+			print("[LT] Baked navmesh on %s (%d polygons, %d source vertices)" % [
+				region.name, polygons, source.get_vertices().size() / 3])
 	# Let the navigation map sync the freshly baked regions.
 	for i in 3:
 		await physics_frame

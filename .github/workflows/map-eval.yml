@@ -56,6 +56,14 @@ jobs:
       - name: Import resources
         run: ~/godot/godot --headless --import || true
 
+      # A refused map used to report `grade: BROKEN` and nothing else, so
+      # "played badly" and "never played" arrived as the same report. This
+      # needs no scene and no firefight, so it runs before the smoke eval.
+      - name: Report findings regression
+        run: |
+          ~/godot/godot --headless --path . \
+            -s res://addons/laser_tag_tool/runners/test_report_findings.gd
+
       - name: Run demo greybox evaluation
         id: eval
         run: |

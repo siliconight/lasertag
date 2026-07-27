@@ -31,7 +31,25 @@ func end_run(reason: EndReason) -> void:
 func end_reason_name() -> String:
 	return EndReason.keys()[end_reason]
 
-func _process(delta: float) -> void:
+## The run clock ticks on the PHYSICS frame, deliberately.
+##
+## Every combat event that reads it -- shots, deaths, line of sight -- is
+## produced from `_physics_process` in LT_BotPlayerController and
+## LT_EnemyBrain. When this ran on `_process` the two were different clocks:
+## `elapsed_seconds` accumulated render-frame delta while the simulation
+## advanced on physics ticks, and headless runs decouple the two entirely.
+## `start_run()` zeroes this and spawns the pills in the same call, so a shot
+## landing before the first render frame was stamped exactly 0.0 -- which is
+## how a report came to claim first contact at 0.0s on a map whose nearest
+## enemy stood 47.8m from a crew that acquires at 45m. The timings were not
+## wrong about the ordering; they were measured with the wrong ruler.
+##
+## On the physics frame these numbers are simulated time: reproducible across
+## machines, independent of frame rate, and directly comparable to the
+## distances and speeds the map was built from. `max_run_time_seconds` becomes
+## a budget of simulated seconds, which is what a deterministic evaluator
+## should have been enforcing all along.
+func _physics_process(delta: float) -> void:
 	if not is_running:
 		return
 	elapsed_seconds += delta

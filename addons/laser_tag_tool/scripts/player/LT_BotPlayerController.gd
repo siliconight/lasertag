@@ -18,6 +18,22 @@ signal bot_stuck(position: Vector3)
 @export var aim_error_degrees: float = 2.5
 ## After taking this many hits in a short window, seek a cover point.
 @export var cover_seek_hit_threshold: int = 2
+## How far the bot will travel to reach cover, in metres. Cover further than
+## this is not cover; it is a destination, and walking to it under fire is
+## worse than holding the route.
+##
+## Measured on category5_baie_dore_001 seed 5017: the crew spawns at (-29, 0),
+## the nearest of the four cover points is 69.4 m away, and every one of them
+## sits 10.8-19.3 m from an enemy spawn because they are all clustered at the
+## objective. Taking two hits sent the bot on a 69 m walk toward the enemies
+## that it had no chance of finishing -- it died at 11.9 s having fired twice.
+## Unbounded "nearest cover" is only sane when cover exists near the crew, and
+## whether it does is exactly what the evaluation is supposed to find out.
+##
+## When nothing is in range the bot keeps its route rather than pretending to
+## take cover, so the map is marked down for having none within reach instead
+## of the harness hiding it.
+@export var cover_seek_max_distance: float = 25.0
 @export var use_navigation: bool = true
 
 @export var stuck_window_seconds: float = 4.0
@@ -196,15 +212,21 @@ func _on_damaged(_current: int, _max: int) -> void:
 	_recent_hits += 1
 	_recent_hit_timer = 4.0
 	if _recent_hits >= cover_seek_hit_threshold and not cover_points.is_empty() and not _seeking_cover:
-		_seeking_cover = true
-		_recent_hits = 0
-		var nearest := cover_points[0]
+		var nearest := Vector3.ZERO
 		var best_distance := INF
 		for cover in cover_points:
 			var distance := body.global_position.distance_to(cover)
 			if distance < best_distance:
 				best_distance = distance
 				nearest = cover
+		# Only break off the route for cover the bot can actually reach. The
+		# old code committed to the nearest point at any distance, which on a
+		# map whose cover is bunched at the objective means abandoning the
+		# route to cross open ground toward the enemies.
+		if best_distance > cover_seek_max_distance:
+			return
+		_seeking_cover = true
+		_recent_hits = 0
 		_set_destination(nearest)
 
 func _update_stuck(delta: float) -> void:

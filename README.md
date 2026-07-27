@@ -13,6 +13,24 @@ machine-readable map reports.
 
 ---
 
+> **Read [`../PIPELINE_MAP.md`](../PIPELINE_MAP.md) before changing anything here.**
+> It covers every repo's role, the job DAG, where artifacts land, and the two
+> rules everything follows from: the deliverable is a level shell that must work
+> standalone in somebody else's Godot project with none of these tools present,
+> and **these tools are not the authority on gameplay or networking**.
+>
+> This repo owns **nothing in the deliverable**. It is an INSTRUMENT: it plays a
+> level to surface failure modes nobody had encoded yet, so Deli Counter and Lot
+> can own them as offline checks. Its bots are not the consumer's AI and its
+> combat model ships to nobody, and its addon is staged into a throwaway project
+> that never enters the package.
+>
+> A finding here is a request for a guardrail UPSTREAM. **Changing Laser Tag to
+> make a level score better is the wrong move every time** — encode what it found
+> where the level gets built, then watch the finding disappear.
+>
+> Live state of the current work: [`../PIPELINE_ROADMAP.md`](../PIPELINE_ROADMAP.md).
+
 ## 60-second start
 
 1. Copy `addons/laser_tag_tool/` into your Godot 4 project.

@@ -21,11 +21,17 @@ func calculate(summary: Dictionary, scenario: LT_TestScenario,
 	findings.append_array(validation_findings)
 
 	if summary.is_empty():
+		# The validation findings are the only record of WHY the harness
+		# refused, and they were being dropped here -- the console printed
+		# NO_WORLD_COLLISION while the report said nothing but "BROKEN".
+		# "The map plays badly" and "the map was never played" are different
+		# statements; keep the one that is true.
+		findings.append(_finding("FAIL", "NO_RUNS", _no_runs_message(validation_findings)))
 		return {
 			"overall_score": 0,
 			"grade": "BROKEN",
 			"categories": {},
-			"findings": [_finding("FAIL", "NO_RUNS", "No runs completed — map could not be evaluated.")],
+			"findings": findings,
 		}
 
 	var unreachable_spawns := _count_findings(validation_findings, "UNREACHABLE_SPAWN")
@@ -50,6 +56,23 @@ func calculate(summary: Dictionary, scenario: LT_TestScenario,
 		},
 		"findings": findings,
 	}
+
+## "No runs completed" on its own reads as a verdict on the map. The reason the
+## harness refused is already in hand when this path is taken -- validation
+## produced it -- so name it here, and keep the findings that carry the detail.
+static func _no_runs_message(validation_findings: Array[Dictionary]) -> String:
+	var blockers: Array[String] = []
+	for finding in validation_findings:
+		if finding.get("severity", "") != "FAIL":
+			continue
+		var type_name: String = finding.get("type", "")
+		if type_name != "" and not blockers.has(type_name):
+			blockers.append(type_name)
+	if blockers.is_empty():
+		return ("No runs completed — map could not be evaluated, and "
+			+ "validation reported no failure to explain it.")
+	return "No runs completed — validation refused the map: %s." % ", ".join(blockers)
+
 
 static func grade_for(score: int) -> String:
 	for band in GRADE_BANDS:
@@ -156,7 +179,8 @@ func _score_sightlines(summary: Dictionary, sightline_data: Dictionary,
 				"Very few enemies were killed per run — sightlines may not support engagement."))
 
 	var survival: float = summary.get("avg_player_survival_seconds", -1.0)
-	var contact: float = summary.get("avg_time_to_first_contact", -1.0)
+	# The enemy's opening, not the run's. See _score_pacing for why.
+	var contact: float = summary.get("avg_time_to_first_enemy_shot", -1.0)
 	if survival >= 0.0 and contact >= 0.0 and survival - contact < 5.0 and summary.get("player_deaths", 0) > 0:
 		score -= 10
 		findings.append(_finding("WARN", "OVEREXPOSED",
@@ -191,13 +215,28 @@ func _score_cover(summary: Dictionary, findings: Array[Dictionary]) -> int:
 ## Combat Pacing: 15 points
 func _score_pacing(summary: Dictionary, scenario: LT_TestScenario,
 		findings: Array[Dictionary]) -> int:
-	var contact: float = summary.get("avg_time_to_first_contact", -1.0)
+	# "When did the crew come under fire?" is the enemy's first shot, not the
+	# run's first shot. `avg_time_to_first_contact` is stamped by whichever
+	# side shoots first (LT_MetricsCollector.record_shot sets it outside the
+	# shooter_is_player branch), and a map placed so the crew acquires first --
+	# 45m player sight against 35m enemy sight, which is the intended design --
+	# produces a SMALL value precisely because it is correct. Judging spawn
+	# proximity by it marked down the maps that got the opening right.
+	var contact: float = summary.get("avg_time_to_first_enemy_shot", -1.0)
 	var survival: float = summary.get("avg_player_survival_seconds", -1.0)
 	var contact_min := scenario.first_contact_min_seconds if scenario != null else 3.0
 	var contact_max := scenario.first_contact_max_seconds if scenario != null else 30.0
 	var min_survival := scenario.min_reasonable_survival_seconds if scenario != null else 10.0
 
 	if contact < 0.0:
+		# No enemy ever fired. If nothing fired at all, combat never started
+		# and that is a real failure. If the crew was shooting, the opening was
+		# simply never contested -- an uncontested map is not a badly paced
+		# one, and scoring it zero would punish the crew for winning.
+		if int(summary.get("shots_fired", 0)) > 0:
+			findings.append(_finding("PASS", "NO_INCOMING_FIRE",
+				"No enemy fired on the crew in any run — the opening was never contested."))
+			return 15
 		findings.append(_finding("FAIL", "NO_CONTACT",
 			"Combat never started in any run."))
 		return 0
@@ -206,14 +245,14 @@ func _score_pacing(summary: Dictionary, scenario: LT_TestScenario,
 	if contact < contact_min:
 		score -= 10
 		findings.append(_finding("WARN", "INSTANT_CONTACT",
-			"First contact happened almost instantly (%.1fs) — spawns may be too close." % contact))
+			"The crew came under fire almost instantly (%.1fs) — spawns may be too close." % contact))
 	elif contact > contact_max:
 		score -= 10
 		findings.append(_finding("WARN", "SLOW_CONTACT",
-			"First contact took %.1fs on average — enemies may be too far or unable to path." % contact))
+			"The crew was first fired on after %.1fs — enemies may be too far or unable to path." % contact))
 	else:
 		findings.append(_finding("PASS", "CONTACT_TIMING",
-			"First contact averaged %.1fs — inside the target window." % contact))
+			"The crew came under fire at %.1fs on average — inside the target window." % contact))
 
 	if survival >= 0.0 and survival < min_survival and summary.get("player_deaths", 0) > 0:
 		score -= 10

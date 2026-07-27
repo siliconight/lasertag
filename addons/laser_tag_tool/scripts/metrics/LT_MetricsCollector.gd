@@ -155,6 +155,16 @@ func summary() -> Dictionary:
 		"runs": runs.size(),
 		"avg_player_survival_seconds": _avg(runs, "player_survival_time"),
 		"avg_time_to_first_contact": _avg(runs, "time_to_first_contact"),
+		# Per-side openings. `time_to_first_contact` is stamped by the first
+		# shot of a run from EITHER side (see record_shot), so it cannot answer
+		# "was the crew shot before it could act". On a map whose spawns are
+		# placed so the crew acquires first, it is SHORT precisely because the
+		# map is RIGHT -- and a consumer reading it as danger blocks the maps
+		# that got it correct. Both halves were already tracked per run and
+		# discarded here; publishing them is what makes the distinction
+		# available to anyone downstream. -1.0 means no run recorded it.
+		"avg_time_to_first_enemy_shot": _avg(runs, "time_to_first_enemy_shot"),
+		"avg_time_to_first_player_shot": _avg(runs, "time_to_first_player_shot"),
 		"route_completion_rate": _rate(runs, "route_completed"),
 		"team_wipe_count": _count_true(runs, "team_wipe"),
 		"player_deaths": _sum(runs, "player_deaths"),
@@ -186,6 +196,7 @@ func summary() -> Dictionary:
 	# Variance — averages hide flaky maps.
 	summary_data.merge(_spread(runs, "player_survival_time", "survival"))
 	summary_data.merge(_spread(runs, "time_to_first_contact", "first_contact"))
+	summary_data.merge(_spread(runs, "time_to_first_enemy_shot", "first_enemy_shot"))
 
 	return summary_data
 
