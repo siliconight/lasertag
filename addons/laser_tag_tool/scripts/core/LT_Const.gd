@@ -28,6 +28,14 @@ const GROUP_AUDIO := "lt_audio"
 const GROUP_NET := "lt_net"
 const GROUP_REGISTRY := "lt_player_registry"
 const GROUP_HARNESS := "lt_harness"
+const GROUP_DESTRUCTIBLE := "lt_destructible"
+const GROUP_DESTRUCTIBLE_SYNC := "lt_destructible_sync"
+# Every cosmetic debris root (procedural shards or an instanced authored
+# set) joins this group. Membership is the ONLY reliable handle: node
+# names are not one, because a sibling name collision renames the
+# newcomer to "@<Class>@<id>" and discards the authored name entirely --
+# measured on 4.3, and it silently blinded a test that counted by name.
+const GROUP_DEBRIS := "lt_debris"
 
 # Map hook name prefixes (TDD §8)
 const HOOK_PLAYER_SPAWN := "LT_PlayerSpawn"
@@ -74,6 +82,21 @@ static func ensure_input_actions() -> void:
 		var mb := InputEventMouseButton.new()
 		mb.button_index = MOUSE_BUTTON_LEFT
 		InputMap.action_add_event(ACTION_FIRE, mb)
+
+## Deterministic lateral offset for the Nth reuse of one spawn point.
+## Spawning two CharacterBody3Ds at the same position feeds Godot's
+## overlap recovery every physics frame: each treats the other as
+## floor, gravity never engages, and the stack ratchets skyward
+## forever (measured 160 m up after 1.5 s). Golden-angle spiral, so
+## every reuse gets its own level spot with no randomness and the
+## radius grows as a point gets more crowded. reuse_index 0 is the
+## first use: the point itself, no offset.
+static func spawn_ring_offset(reuse_index: int) -> Vector3:
+	if reuse_index <= 0:
+		return Vector3.ZERO
+	var angle := float(reuse_index) * 2.399963  # golden angle in radians
+	var radius := 1.0 + 0.25 * float(reuse_index)
+	return Vector3(cos(angle) * radius, 0.0, sin(angle) * radius)
 
 static func _ensure_key(action: StringName, keycode: Key) -> void:
 	if InputMap.has_action(action):

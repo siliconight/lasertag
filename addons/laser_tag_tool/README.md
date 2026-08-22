@@ -237,6 +237,140 @@ side (result authority stays with the simulating peer). All inbound
 payloads are validated (`LT_Cosmetic.validate`) — color parsed, style
 whitelisted, name length clamped.
 
+### Replicated destructibles — breakable glass (in now)
+
+The shards are not the glass; **the state is the glass.** A destructible
+keeps a deliberately tiny authoritative gameplay state — id, hit points,
+intact/broken, a collision toggle — and everything expensive-looking
+about the break (debris, particles, sound) is a local, cosmetic,
+short-lived event each peer plays for itself.
+
+**Drop-in:** place `scenes/LT_BreakableGlass.tscn` in your level — it
+blocks lasers and movement on Layer 1 while intact, and neither once
+broken. Any other body works the same way: put a `Node` named
+`LT_Destructible` (script `scripts/destructible/LT_Destructible.gd`) on
+the CollisionObject3D — same name-lookup convention as `LT_Health` —
+point it at the intact visual and an optional pre-authored broken visual
+(empty frame, wreck, stump), set `hit_points`, done. Window → broken,
+crate → destroyed, monitor → smashed: one system, art decides how
+dramatic the transition looks.
+
+**Solo:** no networking required. A hit applies damage locally; at 0 HP
+the pane swaps visuals, drops collision, and plays debris.
+
+**Coop:** add ONE `LT_DestructibleSync` node to the level. It rides the
+same `LT_NetAdapter` as the cosmetic session (auto-wires when the
+session comes up, or hand it one via `set_adapter()`). One peer —
+`authority_peer_id`, default 1, Godot high-level multiplayer's server
+id — owns the state. Every locally-simulated hit, yours or your local
+enemies', routes to the authority as a request; the authority applies
+damage to the canonical copy and, on the breaking hit, broadcasts one
+small reliable packet `{id, seed, impact, direction}`. Persistent state
+and transient event stay separate concepts: late joiners receive a
+snapshot of broken ids and apply it silently — collision and visuals,
+no debris replay. They only need to know the pane is already broken.
+
+**Debris never crosses the wire.** Each peer picks the same break
+pattern from `hash(id + seed) % pattern_count` — authored
+`debris_scenes` if you provide them, three built-in procedural shard
+patterns otherwise — then simulates its own short-lived cosmetic
+shards. An authored scene made of plain meshes (a zoo `glass_shard`
+GLB imports as exactly that) is flung automatically: every mesh is
+wrapped in a cosmetic rigid body with a seeded impulse, so a shards
+GLB skinned by the same Pixelcoat glass pack as the pane drops
+straight into `debris_scenes` with no manual setup. A scene that
+ships its own physics animates itself. `debris_quality` scales shard count per machine (low / medium /
+high) while collision, traversal, and sightlines stay identical for
+everyone; `debris_lifetime` fades and frees the pieces. Nobody needs to
+agree where shards bounce; everybody agrees the pane is broken.
+
+**Bullets break glass; bombs break breaches.** `bullet_breakable`
+(default on) gates the LT_Shooter path: set it off for a breach wall or
+anything that answers to a charge rather than small arms, and trigger
+the break from your explosive's code via `register_blast()` — same
+authority routing, same replication, same late-join snapshot, only the
+trigger differs. This pairs with Deli Counter's interactive kinds: a
+`window` machine transitions on `break`, a `breach_wall` on `breach` —
+the game maps weapons to events; the proxy doesn't care which weapon.
+Debris differs with the material: `debris_style = rubble` throws chunky
+low-flying masonry (|vy| ≤ 0.6, slow tumble, `play_breach` audio hook)
+where glass bursts and glitters — a breach is a thud, not a chime.
+
+**THE SEAM — breach walls and doors belong to YOUR netcode.**
+`scenes/LT_BreachWall.tscn` ships `game_driven = true`: like a door,
+its state machine lives on the gameplay/networking layer per
+INTERACTIVES.md, and this toolset only reports and presents. The
+integration surface your engineers hook up later, in full: stimuli
+arrive on the `break_requested(damage, impact, direction, blast)`
+signal (nothing breaks on its own — a charge against a game-driven
+wall emits a request and stops); your replicated state machine decides
+and then calls `apply_break(impact, direction, seed, with_effects)` on
+every peer (pass `with_effects = false` for late-join state) and
+`reset_intact()` on round reset; `broke` / `state_changed` fire for
+anything listening; `destructible_id` is yours to set to the
+`gameplay.json` interactive id (`cr_deli:if:...`) so the fixture and
+the contract entry correlate. `LT_DestructibleSync` ignores
+game-driven fixtures completely — no requests, no broadcasts, no
+snapshot entries — so the toolset's cosmetic-layer authority and your
+gameplay authority can never fight over one wall. Glass panes stay
+toolset-driven by default; flip `game_driven` on when your netcode is
+ready to own them too, and the presentation layer doesn't change.
+
+Validation mirrors the cosmetic layer: break state is accepted only
+from the authority peer, request damage is clamped, unknown ids are
+ignored. `reset_intact()` restores a pane locally (fresh run) — state
+is otherwise permanent for the session, which is exactly what late
+joiners need it to be. A hit that lands while a client is still
+connecting is dropped, not applied locally — a local break in that
+window would diverge from the authority forever. Gameplay stays
+intentionally simple; art is allowed to be complicated.
+
+**Upgrading the break art — the visuals ship primitive on purpose.**
+The procedural shards and the bar-frame broken state are the
+zero-asset floor; better-looking breaks plug into three independent
+sockets without touching state, netcode, or a single test. (1) Drop
+authored shatter scenes into `debris_scenes` — the seeded pattern
+index picks one per break on every peer, plain-mesh GLBs are wrapped
+and flung automatically, and the zoo `glass_shard` species (skinned by
+the pane's own Pixelcoat pack, so the pieces look like the pane)
+builds exactly those. (2) Point `broken_visual_path` at a real broken
+state — the zoo `window_broken` species builds a glazed remnant whose
+void matches the intact `window` by construction. (3) Hook
+`broke(impact_point, impact_direction, break_seed)` for particles,
+decals, and sound — cosmetic, local, deterministic per seed. Swap any
+socket independently, ship them in any order; the proxy's contract
+does not move.
+
+**Seeing it.** `scenes/demo/LT_DestructibleShowcase.tscn` is the
+eyeball pass: the demo greybox plus four labelled exhibits at the
+player spawn — a one-shot pane, a 3-hit pane, a high-tier-debris pane,
+and a game-driven breach wall. Shoot the glass; press **B** to set a
+charge against the wall (its driver script is a live, printing example
+of the break_requested → apply_break seam); press **G** to restore
+everything. Run it solo, or as the host instance in the two-instance
+coop setup to watch breaks replicate.
+
+**Proving it.** Two instruments ship with the system. Single-process
+(state machine, validation, and a real physics raycast that blocks on
+intact glass and passes once broken):
+
+```
+godot --headless --path . \
+  -s res://addons/laser_tag_tool/runners/tests/test_destructible.gd
+```
+
+Three-process, over a real ENet session on localhost — client hit
+routes to the authority and round-trips, host break replicates live
+with debris, late joiner gets both panes by snapshot with none:
+
+```
+addons\laser_tag_tool\runners\tests\net_test\run_net_test.bat
+```
+
+(or run `net_host.gd`, `net_client.gd`, `net_late.gd` with `-s` in
+three terminals, host first). Expect `HOST PASS`, `CLIENT PASS`,
+`LATE PASS`. Exit codes are CI-friendly: 0 pass, 1 fail.
+
 ### debug-shot-tracers bridge
 
 If the `debug-shot-tracers` addon is installed (ShotDebugBus /

@@ -93,6 +93,14 @@ func fire(direction: Vector3) -> LT_ShotResult:
 
 	shot.was_blocked = true
 	shot.hit_type = "WORLD_BLOCKED"
+
+	# Destructible proxies (breakable glass, ...): the pane blocked this
+	# shot like any world geometry — and it also registers the hit. Found
+	# by node name, same convention as the LT_Health lookup above.
+	if hit_object != null and hit_object.has_node("LT_Destructible"):
+		var destructible: LT_Destructible = hit_object.get_node("LT_Destructible")
+		destructible.register_hit(damage, shot.hit_position, direction.normalized())
+
 	return shot
 
 func _is_same_team(hit_object: Node) -> bool:

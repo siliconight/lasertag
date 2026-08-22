@@ -1,0 +1,64 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="PackedScene" path="res://addons/laser_tag_tool/scenes/demo/LT_DemoGreybox.tscn" id="1_greybox"]
+[ext_resource type="PackedScene" path="res://addons/laser_tag_tool/scenes/LT_BreakableGlass.tscn" id="2_glass"]
+[ext_resource type="PackedScene" path="res://addons/laser_tag_tool/scenes/LT_BreachWall.tscn" id="3_breach"]
+[ext_resource type="Script" path="res://addons/laser_tag_tool/scenes/demo/LT_ShowcaseDriver.gd" id="4_driver"]
+
+[node name="LT_DestructibleShowcase" type="Node3D"]
+
+[node name="Greybox" parent="." instance=ExtResource("1_greybox")]
+
+[node name="Exhibits" type="Node3D" parent="."]
+
+[node name="GlassOneShot" parent="Exhibits" instance=ExtResource("2_glass")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.5, 1.2, 14)
+
+[node name="GlassThreeHits" parent="Exhibits" instance=ExtResource("2_glass")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.5, 1.2, 14)
+
+[node name="LT_Destructible" parent="Exhibits/GlassThreeHits"]
+hit_points = 3
+
+[node name="GlassHighDebris" parent="Exhibits" instance=ExtResource("2_glass")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.5, 1.2, 14)
+
+[node name="LT_Destructible" parent="Exhibits/GlassHighDebris"]
+debris_quality = 2
+
+[node name="BreachWall" parent="Exhibits" instance=ExtResource("3_breach")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5.5, 1.5, 14)
+
+[node name="Labels" type="Node3D" parent="."]
+
+[node name="LabelOneShot" type="Label3D" parent="Labels"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.5, 2.8, 14)
+billboard = 1
+text = "SHOOT
+one-shot pane"
+
+[node name="LabelThreeHits" type="Label3D" parent="Labels"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.5, 2.8, 14)
+billboard = 1
+text = "SHOOT
+3-hit pane"
+
+[node name="LabelHighDebris" type="Label3D" parent="Labels"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.5, 2.8, 14)
+billboard = 1
+text = "SHOOT
+high-tier debris"
+
+[node name="LabelBreach" type="Label3D" parent="Labels"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5.5, 3.4, 14)
+billboard = 1
+text = "PRESS B - breach charge
+(game-driven seam)
+G restores everything"
+
+[node name="Driver" type="Node" parent="."]
+script = ExtResource("4_driver")
+breach_wall_path = NodePath("../Exhibits/BreachWall/LT_Destructible")
+
+[editable path="Exhibits/GlassThreeHits"]
+[editable path="Exhibits/GlassHighDebris"]

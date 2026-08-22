@@ -21,6 +21,16 @@ var _dead: bool = false
 func _ready() -> void:
 	if body == null and get_parent() is CharacterBody3D:
 		body = get_parent()
+	# See LT_EnemyBrain._ready(): typed @export node references can load
+	# null under a version-mismatched scene. body already had a fallback;
+	# camera and shooter did not, so on 4.7 fire_once() null-checked them
+	# and silently swallowed every click. Nothing ever caught it because
+	# this controller is the only one a HUMAN exercises -- bots, enemies,
+	# and headless CI all fire through paths that already re-resolve.
+	if camera == null and body != null and body.has_node("Camera3D"):
+		camera = body.get_node("Camera3D")
+	if shooter == null and body != null and body.has_node("LT_Shooter"):
+		shooter = body.get_node("LT_Shooter")
 	if body != null and body.has_node("LT_Health"):
 		var health: LT_Health = body.get_node("LT_Health")
 		health.died.connect(func() -> void: _dead = true)

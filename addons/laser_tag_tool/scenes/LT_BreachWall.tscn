@@ -1,0 +1,59 @@
+[gd_scene load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://addons/laser_tag_tool/scripts/destructible/LT_Destructible.gd" id="1_destructible"]
+
+[sub_resource type="BoxShape3D" id="wall_shape"]
+size = Vector3(2.4, 3, 0.3)
+
+[sub_resource type="StandardMaterial3D" id="concrete_material"]
+albedo_color = Color(0.52, 0.5, 0.47, 1)
+roughness = 0.92
+
+[sub_resource type="BoxMesh" id="wall_mesh"]
+material = SubResource("concrete_material")
+size = Vector3(2.4, 3, 0.3)
+
+[sub_resource type="BoxMesh" id="stub_mesh"]
+material = SubResource("concrete_material")
+size = Vector3(0.35, 3, 0.3)
+
+[sub_resource type="BoxMesh" id="lintel_mesh"]
+material = SubResource("concrete_material")
+size = Vector3(2.4, 0.3, 0.3)
+
+[node name="LT_BreachWall" type="StaticBody3D"]
+collision_layer = 1
+collision_mask = 0
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+shape = SubResource("wall_shape")
+
+[node name="WallPanel" type="MeshInstance3D" parent="."]
+mesh = SubResource("wall_mesh")
+
+[node name="BreachedFrame" type="Node3D" parent="."]
+visible = false
+
+[node name="StubL" type="MeshInstance3D" parent="BreachedFrame"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.025, 0, 0)
+mesh = SubResource("stub_mesh")
+
+[node name="StubR" type="MeshInstance3D" parent="BreachedFrame"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.025, 0, 0)
+mesh = SubResource("stub_mesh")
+
+[node name="Lintel" type="MeshInstance3D" parent="BreachedFrame"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.35, 0)
+mesh = SubResource("lintel_mesh")
+
+[node name="LT_Destructible" type="Node" parent="."]
+script = ExtResource("1_destructible")
+body_path = NodePath("..")
+intact_visual_path = NodePath("../WallPanel")
+broken_visual_path = NodePath("../BreachedFrame")
+bullet_breakable = false
+game_driven = true
+debris_style = 1
+debris_color = Color(0.52, 0.5, 0.47, 1)
+shard_size = 0.3
+debris_lifetime = 6.0

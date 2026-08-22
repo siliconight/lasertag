@@ -1,0 +1,62 @@
+[gd_scene load_steps=8 format=3]
+
+[ext_resource type="Script" path="res://addons/laser_tag_tool/scripts/destructible/LT_Destructible.gd" id="1_destructible"]
+
+[sub_resource type="BoxShape3D" id="pane_shape"]
+size = Vector3(2, 2.4, 0.08)
+
+[sub_resource type="StandardMaterial3D" id="glass_material"]
+transparency = 1
+albedo_color = Color(0.62, 0.82, 0.94, 0.28)
+metallic = 0.2
+roughness = 0.05
+
+[sub_resource type="BoxMesh" id="pane_mesh"]
+material = SubResource("glass_material")
+size = Vector3(2, 2.4, 0.08)
+
+[sub_resource type="StandardMaterial3D" id="frame_material"]
+albedo_color = Color(0.25, 0.27, 0.3, 1)
+
+[sub_resource type="BoxMesh" id="frame_bar_h"]
+material = SubResource("frame_material")
+size = Vector3(2, 0.08, 0.1)
+
+[sub_resource type="BoxMesh" id="frame_bar_v"]
+material = SubResource("frame_material")
+size = Vector3(0.08, 2.4, 0.1)
+
+[node name="LT_BreakableGlass" type="StaticBody3D"]
+collision_layer = 1
+collision_mask = 0
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+shape = SubResource("pane_shape")
+
+[node name="GlassPane" type="MeshInstance3D" parent="."]
+mesh = SubResource("pane_mesh")
+
+[node name="BrokenFrame" type="Node3D" parent="."]
+visible = false
+
+[node name="EdgeTop" type="MeshInstance3D" parent="BrokenFrame"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.16, 0)
+mesh = SubResource("frame_bar_h")
+
+[node name="EdgeBottom" type="MeshInstance3D" parent="BrokenFrame"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -1.16, 0)
+mesh = SubResource("frame_bar_h")
+
+[node name="EdgeLeft" type="MeshInstance3D" parent="BrokenFrame"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.96, 0, 0)
+mesh = SubResource("frame_bar_v")
+
+[node name="EdgeRight" type="MeshInstance3D" parent="BrokenFrame"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.96, 0, 0)
+mesh = SubResource("frame_bar_v")
+
+[node name="LT_Destructible" type="Node" parent="."]
+script = ExtResource("1_destructible")
+body_path = NodePath("..")
+intact_visual_path = NodePath("../GlassPane")
+broken_visual_path = NodePath("../BrokenFrame")

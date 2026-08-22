@@ -177,7 +177,15 @@ func _tint_pill(pill: Node, color: Color) -> void:
 		return
 	var material := StandardMaterial3D.new()
 	material.albedo_color = color
-	mesh.surface_material_override = material
+	# set_surface_override_material, not `surface_material_override` --
+	# MeshInstance3D has no property by that name, so this line errored on
+	# every spawn and every cosmetic change and the LOCAL pill was never
+	# tinted. Nobody saw it: the local pill is behind a first-person
+	# camera, ghosts tint through their own material, and headless runs
+	# print script errors without stopping. An F5 run with the debugger
+	# attached finally broke on it.
+	if mesh.get_surface_override_material_count() > 0:
+		mesh.set_surface_override_material(0, material)
 
 func _build_children() -> void:
 	registry = LT_PlayerRegistry.new()
@@ -391,7 +399,11 @@ func spawn_players(bot: bool) -> Array[Node]:
 		var pill := PLAYER_PILL.instantiate()
 		pill.name = "LT_Player_%02d" % (i + 1)
 		add_child(pill)
-		pill.global_position = spawn.global_position
+		# Reusing a spawn point gets a ring offset -- coincident pills
+		# elevator each other forever (see LT_Const.spawn_ring_offset).
+		@warning_ignore("integer_division")
+		var reuse := i / player_spawns.size() if not player_spawns.is_empty() else i
+		pill.global_position = spawn.global_position + LT_Const.spawn_ring_offset(reuse)
 		_configure_player(pill, bot)
 		registry.register_player(pill)
 		_live_pills.append(pill)
@@ -458,7 +470,12 @@ func spawn_enemies() -> void:
 		var pill := ENEMY_PILL.instantiate()
 		pill.name = "LT_Enemy_%02d" % (i + 1)
 		add_child(pill)
-		pill.global_position = spawn.global_position
+		# More enemies than spawn points is the norm (demo greybox: 6 on
+		# 2). Reuse gets a ring offset -- coincident pills elevator each
+		# other forever (see LT_Const.spawn_ring_offset).
+		@warning_ignore("integer_division")
+		var reuse := i / spawn_order.size()
+		pill.global_position = spawn.global_position + LT_Const.spawn_ring_offset(reuse)
 		_configure_enemy(pill)
 		_live_pills.append(pill)
 
