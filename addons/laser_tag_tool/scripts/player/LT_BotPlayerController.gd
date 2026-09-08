@@ -77,6 +77,7 @@ func _ready() -> void:
 			health.died.connect(func() -> void: _dead = true)
 
 func start_route(points: Array[Vector3], covers: Array[Vector3] = []) -> void:
+	_align_agent_to_mesh()
 	route_points = points
 	cover_points = covers
 	_route_index = 0
@@ -288,3 +289,33 @@ func debug_status() -> String:
 
 func _fmt(v: Vector3) -> String:
 	return "(%.1f,%.1f,%.1f)" % [v.x, v.y, v.z]
+
+
+func _align_agent_to_mesh() -> void:
+	"""Lift returned path points to the walking surface (roadmap 122).
+
+	A baked navmesh sits ONE CELL HEIGHT above the geometry it was baked from,
+	and `get_next_path_position()` returns points on that mesh. The body's
+	origin is at its FEET, on the geometry. So every path point is
+	`cell_height` higher than the body that is walking to it, and Godot
+	measures `path_desired_distance` in 3D -- the vertical error is spent out
+	of the arrival budget before a single horizontal metre is counted.
+
+	`path_height_offset` is subtracted from the y of every returned path
+	point, which is exactly this correction, and the amount is READ FROM THE
+	MAP rather than chosen: `map_get_cell_height` is the number the bake
+	actually used, so a different bake stays correct without anyone editing a
+	constant here.
+
+	NECESSARY, NOT SUFFICIENT, and that is measured rather than hoped:
+	applying this alone on `market_row_001` moved the returned point from
+	y 0.25 to y 0.00 and the bot still did not walk, because it had SPAWNED
+	1.797 m above the nearest navmesh point -- standing on geometry the mesh
+	does not cover. No agent tuning fixes a body that is not on the mesh; that
+	half is a spawn-placement defect and is filed separately.
+	"""
+	if nav_agent == null:
+		return
+	var map: RID = nav_agent.get_navigation_map()
+	if map.is_valid():
+		nav_agent.path_height_offset = NavigationServer3D.map_get_cell_height(map)

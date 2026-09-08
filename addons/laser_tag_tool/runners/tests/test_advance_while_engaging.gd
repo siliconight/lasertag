@@ -76,6 +76,22 @@ func _init() -> void:
 		"a scale of 0.0 reproduces stand-and-fight exactly, so the old "
 		+ "behaviour stays reachable from the scenario")
 
+	print("[4] the body comes from the contract, not the .tscn")
+	# agent_contract.json characters.player, which is what these default to.
+	check(is_equal_approx(scen.player_radius_m, 0.35),
+		"player_radius_m 0.35 -- the CONTRACT's player, not the bake's 0.40 "
+		+ "agent radius the pill used to be built at")
+	check(is_equal_approx(scen.player_height_m, 1.8),
+		"player_height_m 1.8")
+	check(is_equal_approx(scen.player_eye_height_m, 1.6),
+		"player_eye_height_m 1.6")
+	check(is_equal_approx(scen.player_walk_speed_mps, 4.0),
+		"player_walk_speed_mps 4.0 -- the contract's, not the bot's old 4.5")
+	check(scen.player_eye_height_m < scen.player_height_m,
+		"the eye is inside the body")
+	check(scen.player_height_m > 2.0 * scen.player_radius_m,
+		"the capsule is taller than it is wide, so height is not clamped away")
+
 	bot.free()
 
 	if failures == 0:

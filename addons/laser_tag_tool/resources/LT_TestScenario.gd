@@ -17,6 +17,27 @@ class_name LT_TestScenario
 ## show-off mode). Toggle live in manual mode with [N]. Default ON.
 @export var enemies_enabled: bool = true
 
+@export_group("Body")
+## THE BODY THE PROXY STANDS FOR. Nobody ships a floating capsule: the pill
+## exists so the toolchain can prove that a body of a STATED size fits the
+## doors, stairs and headroom the factory generates. These default to
+## `deli_counter/agent_contract.json`'s `characters.player`, which calls
+## itself "THE single source of truth for character/agent dimensions and every
+## clearance derived from them" -- so a studio with taller or wider characters
+## states it once there, and the body that TESTS the clearances moves with the
+## clearances themselves.
+##
+## They were hardcoded in `LT_PlayerPill.tscn` until 0.11.0 and had drifted:
+## the pill was 0.40 m wide against the contract's 0.35, and walked at 4.5 m/s
+## against 4.0. The 0.40 is `nav_bake.agent_radius_m`, whose own note reads
+## "fattest navigating character + 0.05 safety" -- the bake's safety margin had
+## been built into the body, so every door-width test ran against a proxy 14%
+## fatter than the character it stood for. Roadmap 123.
+@export var player_radius_m: float = 0.35
+@export var player_height_m: float = 1.8
+@export var player_eye_height_m: float = 1.6
+@export var player_walk_speed_mps: float = 4.0
+
 @export_group("Combat Tuning")
 @export var player_laser_range: float = 60.0
 @export var enemy_laser_range: float = 35.0

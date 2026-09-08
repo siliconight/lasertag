@@ -410,8 +410,58 @@ func spawn_players(bot: bool) -> Array[Node]:
 		players.append(pill)
 	return players
 
+func _apply_body(pill: Node) -> void:
+	"""Build the pill from the scenario's BODY, not from the .tscn.
+
+	The scene's capsule, mesh, camera and speed were authored once and never
+	moved again; the contract they are supposed to stand for lives in
+	`deli_counter/agent_contract.json` and had already drifted from them
+	(roadmap 123). Everything here derives from the four `player_*_m` fields
+	so that a consumer states their character's size in ONE place.
+
+	The origin sits at the capsule's FEET -- the shape and mesh are offset by
+	half the height -- which is what makes `global_position.y` the walking
+	surface and is relied on by the navigation offset below.
+	"""
+	var r: float = maxf(0.05, scenario.player_radius_m)
+	var hgt: float = maxf(2.0 * r, scenario.player_height_m)
+
+	var shape_node: CollisionShape3D = pill.get_node_or_null("CollisionShape3D")
+	if shape_node != null and shape_node.shape is CapsuleShape3D:
+		# DUPLICATE, or every pill in the scene shares one resource and the
+		# last write wins -- the sub_resource in the .tscn is one instance.
+		var cap: CapsuleShape3D = (shape_node.shape as CapsuleShape3D).duplicate()
+		cap.radius = r
+		cap.height = hgt
+		shape_node.shape = cap
+		shape_node.position.y = hgt * 0.5
+
+	var mesh_node: MeshInstance3D = pill.get_node_or_null("MeshInstance3D")
+	if mesh_node != null and mesh_node.mesh is CapsuleMesh:
+		var cm: CapsuleMesh = (mesh_node.mesh as CapsuleMesh).duplicate()
+		cm.radius = r
+		cm.height = hgt
+		mesh_node.mesh = cm
+		mesh_node.position.y = hgt * 0.5
+
+	var cam: Camera3D = pill.get_node_or_null("Camera3D")
+	if cam != null:
+		cam.position.y = clampf(scenario.player_eye_height_m, 0.1, hgt)
+
+	var bot_c: LT_BotPlayerController = pill.get_node_or_null(
+		"LT_BotPlayerController")
+	if bot_c != null:
+		bot_c.move_speed = scenario.player_walk_speed_mps
+
+	var agent: NavigationAgent3D = pill.get_node_or_null("NavigationAgent3D")
+	if agent != null:
+		agent.radius = r
+		agent.height = hgt
+
+
 func _configure_player(pill: Node, bot: bool) -> void:
 	pill.set_meta("lt_peer_id", multiplayer.get_unique_id() if not bot else 1)
+	_apply_body(pill)
 
 	var health: LT_Health = pill.get_node("LT_Health")
 	health.max_health = scenario.player_health
