@@ -431,6 +431,13 @@ func _configure_player(pill: Node, bot: bool) -> void:
 		var camera: Camera3D = pill.get_node("Camera3D")
 		camera.current = false
 		bot_controller.use_navigation = navigation_available
+		# ASSIGNED FROM THE SCENARIO, which is the whole of
+		# LT_ENGAGEMENT_NOT_CONFIGURABLE: these were `@export` defaults the
+		# harness never wrote, so the scenario resource could not reach them
+		# even though it exposed the enemy's equivalents.
+		bot_controller.sight_range = scenario.player_sight_range
+		bot_controller.advance_while_engaging = scenario.advance_while_engaging
+		bot_controller.engaged_move_speed_scale = scenario.engaged_move_speed_scale
 		bot_controller.start_route(_bot_route(), _points_to_positions(cover_points))
 	else:
 		bot_controller.set_physics_process(false)

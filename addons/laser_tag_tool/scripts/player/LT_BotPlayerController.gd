@@ -34,6 +34,12 @@ signal bot_stuck(position: Vector3)
 ## take cover, so the map is marked down for having none within reach instead
 ## of the harness hiding it.
 @export var cover_seek_max_distance: float = 25.0
+## Advance the route WHILE engaging, instead of stopping to shoot
+## (roadmap 121). False is the original behaviour and the default.
+@export var advance_while_engaging: bool = false
+## Fraction of `move_speed` kept while engaging, when the above is on.
+@export var engaged_move_speed_scale: float = 0.5
+
 @export var use_navigation: bool = true
 
 @export var stuck_window_seconds: float = 4.0
@@ -88,7 +94,25 @@ func _physics_process(delta: float) -> void:
 
 	var enemy := _find_visible_enemy()
 	if enemy != null:
-		_stop_horizontal()
+		# STAND AND FIGHT, or FIGHT AND MOVE (roadmap 121). The first is the
+		# original and still the default: route progress and enemy presence
+		# are then mutually exclusive, which is why `route_completion_rate`
+		# reads zero on any map with live guards whatever the map looks like.
+		#
+		# Advancing first and scaling the velocity afterwards keeps ONE copy
+		# of the routing logic -- `_advance_route` also steps the waypoint
+		# index and emits `route_completed`, and a second movement path here
+		# would be a second place for those to happen.
+		#
+		# Facing is applied AFTER, so the bot looks at what it is shooting
+		# rather than where it is walking. Aim does not depend on it:
+		# `_fire_at` aims at the enemy's chest directly.
+		if advance_while_engaging:
+			_advance_route(delta)
+			body.velocity.x *= engaged_move_speed_scale
+			body.velocity.z *= engaged_move_speed_scale
+		else:
+			_stop_horizontal()
 		_face_point(enemy.global_position)
 		if _fire_timer <= 0.0:
 			_fire_at(enemy)
