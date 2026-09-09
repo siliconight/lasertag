@@ -583,6 +583,37 @@ func reset_run() -> void:
 func _clear_pills() -> void:
 	for pill in _live_pills:
 		if is_instance_valid(pill):
+			# TAKE IT OUT OF THE TREE BEFORE FREEING IT (roadmap 125).
+			# `queue_free` is DEFERRED to the end of the frame, and this runs
+			# mid-frame -- `run_ended` is emitted from a process callback, so
+			# end_run, _clear_pills and start_run all happen inside one frame.
+			# A pill therefore stayed in the tree, and kept processing, until
+			# after the NEXT run had already begun. Two things followed.
+			#
+			# ONE: it could still fire. Measured on market_row_001 seed 7503,
+			# with a probe at the fire site and the record site: a shot fired
+			# by LT_Enemy_04 with `is_queued_for_deletion()` true, at
+			# `run_state.elapsed_seconds` of 0.000 of the FOLLOWING run. That
+			# stamped that run's `time_to_first_contact` and
+			# `time_to_first_enemy_shot` as zero, and the count tracked team
+			# wipes exactly -- one corrupted run per boundary a wipe crossed.
+			# It dragged avg_time_to_first_enemy_shot to 0.38 s and read as
+			# "enemies open fire instantly", which no level produced.
+			#
+			# TWO: the old pill still held its NAME, so `spawn_enemies`
+			# setting `pill.name = "LT_Enemy_%02d"` collided and Godot
+			# auto-renamed the new one. Every run after the first reported its
+			# sources as `@CharacterBody3D@13` -- 17 of 23 names in one 8-run
+			# report -- so any finding naming a shooter was unusable.
+			#
+			# `process_mode = PROCESS_MODE_DISABLED` does NOT fix either: the
+			# node is already scheduled for the frame in progress, and it keeps
+			# its name regardless. Leaving the tree stops the processing at
+			# once and frees the name, while `queue_free` still does the actual
+			# deletion safely at the end of the frame.
+			var parent: Node = pill.get_parent()
+			if parent != null:
+				parent.remove_child(pill)
 			pill.queue_free()
 	_live_pills.clear()
 	registry.clear()

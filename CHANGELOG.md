@@ -1,5 +1,46 @@
 # Changelog
 
+## [0.14.0] - a run's pills are gone before the next run starts
+
+Roadmap 125, which 0.13.0 named as known and unexplained.
+
+### Fixed
+- `_clear_pills` removes each pill from the tree before freeing it.
+  `queue_free` is deferred to the end of the frame, and this runs mid-frame --
+  `run_ended` is emitted from a process callback, so `end_run`,
+  `_clear_pills` and `start_run` all happen inside one frame. A pill stayed in
+  the tree, and kept processing, until after the next run had already begun.
+
+  IT COULD STILL FIRE. With probes at the fire site and the record site on
+  market_row_001 seed 7503: a shot by `LT_Enemy_04` with
+  `is_queued_for_deletion()` true, at `run_state.elapsed_seconds` of 0.000 of
+  the FOLLOWING run. That stamped that run's `time_to_first_contact` and
+  `time_to_first_enemy_shot` as zero, one corrupted run per boundary a team
+  wipe crossed. Over 4 runs:
+
+        time_to_first_contact   2.93, 0.00, 0.00, 0.00  ->  2.93 x 4
+        avg_time_to_first_contact          0.37  ->  2.93
+        avg_time_to_first_enemy_shot       0.38  ->  3.07
+
+  Run outcomes are unchanged (11.1, 8.1, 8.4, 10.0 s either side), so this
+  moves the measurement and not the game.
+
+  AND IT KEPT ITS NAME, which is the second defect and was not noticed until
+  the fix removed it. `spawn_enemies` sets `pill.name = "LT_Enemy_%02d"`, that
+  collided with the pill still in the tree, and Godot auto-renamed the new
+  one. Every run after the first reported its sources as
+  `@CharacterBody3D@13`: 17 of 23 source names in one 8-run report, now 0. Any
+  finding naming a shooter was unusable after run 1.
+
+  `process_mode = PROCESS_MODE_DISABLED` fixes NEITHER -- the node is already
+  scheduled for the frame in progress and keeps its name regardless. That was
+  tried first, measured to change nothing, and reverted.
+
+### Added
+- `runners/tests/test_run_boundary_is_clean.gd`, including a check that pins
+  the engine assumption the fix rests on: a `queue_free`d node still holds its
+  name for the rest of the frame, so the replacement is auto-renamed.
+
 ## [0.13.0] - a corpse is not a wall
 
 Roadmap 124, and the collision rules stated plainly: players do not collide
