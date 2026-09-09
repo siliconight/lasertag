@@ -155,6 +155,22 @@ func _on_died() -> void:
 	if movement != null:
 		movement.stop()
 		movement.set_physics_process(false)
+	# A CORPSE IS NOT A WALL (roadmap 124). This kept `LAYER_ENEMY` forever, so
+	# the body stayed solid to everything that masks against it: the evaluation
+	# bot walked into one 0.8 m from its next path point and stopped there for
+	# the rest of the run, 76 of 79 stuck events on `market_row_001` in one
+	# spot. The navmesh is baked before anybody dies, so nothing in the path
+	# knows a body arrived and `NavigationAgent3D` keeps routing straight
+	# through it.
+	#
+	# Leaving the layer settles three things at once, because they were all one
+	# cause: bodies stop colliding with it, `LT_LineOfSightTester` stops
+	# treating it as an occluder, and `LT_Shooter` stops counting a ray that
+	# lands on it -- a corpse still has an `LT_Health`, so a shot into one was
+	# recorded `did_damage = true` and `ENEMY_HIT` while `apply_hit` early-returned
+	# on `is_dead`, inflating `shots_hit` with rounds absorbed by a body.
+	if _body is CollisionObject3D:
+		(_body as CollisionObject3D).set_collision_layer(0)
 	get_tree().call_group(LT_Const.GROUP_METRICS, "record_event", "EnemyKilled", {
 		"source": _source_name(),
 	})

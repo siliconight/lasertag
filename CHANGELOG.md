@@ -1,5 +1,63 @@
 # Changelog
 
+## [0.13.0] - a corpse is not a wall
+
+Roadmap 124, and the collision rules stated plainly: players do not collide
+with each other or with corpses; players do collide with enemies, while those
+enemies are alive.
+
+### Fixed
+- `LT_EnemyBrain._on_died` takes the body off every collision layer. It stopped
+  the movement component and left the collider on `LAYER_ENEMY` forever, so a
+  dead enemy stayed solid to everything that masks against it. The evaluation
+  bot walked into one 0.8 m from its next path point and stood there for the
+  rest of the run.
+
+  Three symptoms, one cause, because `LASER_HIT_MASK` includes `LAYER_ENEMY`
+  and both line of sight and shooting use it: bodies collided with corpses,
+  `LT_LineOfSightTester` treated them as occluders, and `LT_Shooter` recorded a
+  ray that stopped on one as `did_damage = true` / `ENEMY_HIT` -- a corpse
+  still carries an `LT_Health`, so rounds absorbed by a body were counted as
+  hits while `apply_hit` early-returned on `is_dead`.
+
+  Measured on market_row_001 seed 7503, 8 runs, identical seed either side:
+
+        player_stuck_events    79  ->  0
+        enemy_stuck_events     33  ->  0
+
+  Both to zero, which is what says corpses owned all of them.
+
+- `LT_PlayerPill` no longer masks `LAYER_PLAYER`: mask 7 -> 5, so players pass
+  through each other. Crew members were solid to one another, which is what
+  `LT_Const.spawn_ring_offset` exists to work around -- coincident pills
+  "elevator each other forever".
+
+### Added
+- `runners/tests/test_body_collision_rules.gd` -- asserts the player mask
+  excludes PLAYER and includes ENEMY and WORLD, that a live enemy is on
+  `LAYER_ENEMY`, and that a killed one leaves every layer.
+
+### Known
+- THE CREW NOW DIES FAST, and this is the honest consequence rather than a
+  regression to hide: survival 53.67 s -> 8.95 s, 1 team wipe -> 8, over the
+  same 8 runs. Corpses had been acting as cover and as sight blockers, which
+  was never a decision -- it fell out of them keeping their layer. Whether a
+  body should stop a laser is a design question this does not answer.
+
+- `route_completion_rate` is still 0.0. Removing the blocker did not produce a
+  completed route; see roadmap 121 for what else gates it.
+
+- Metrics leak across the run boundary, and it is NOT caused by this change.
+  A shot from the end of one run is recorded against the next at `_now()` of
+  0.0, stamping its `time_to_first_contact` and `time_to_first_enemy_shot` as
+  zero. The count tracks team wipes exactly: 1 wipe gave 1 corrupted run
+  before this change, 8 wipes gave 7 after -- one per boundary a wipe crossed,
+  run 1 having no predecessor. It drags `avg_time_to_first_enemy_shot` from
+  2.70 s to 0.38 s and reads as "enemies open fire instantly". Disabling the
+  pill's process mode before `queue_free` does NOT fix it, so the recording is
+  arriving late rather than the pill firing late; the mechanism is not
+  established and that attempt was reverted rather than shipped.
+
 ## [0.12.0] - the cover measure stops depending on where the spawns are
 
 `LT_MapSampler` answered "is there cover here" by raycasting every walkable
