@@ -648,20 +648,46 @@ func run_evaluation(eval_scenario: LT_TestScenario) -> Dictionary:
 		return _last_score
 
 	sightline_data = {}
-	if scenario.enable_map_sampling and not enemy_spawns.is_empty():
+	# NO LONGER GATED ON ENEMY SPAWNS. The sampler's job is to describe the
+	# LEVEL, and it used to produce nothing at all without spawn markers --
+	# including the figures that never needed them. Spawn placement is
+	# gameplay-layer work and is expected to leave this toolchain; an
+	# instrument that goes silent when it does was measuring the wrong thing.
+	if scenario.enable_map_sampling:
 		map_sampler.sample_spacing = scenario.sample_spacing
 		map_sampler.overexposed_threshold = scenario.overexposed_threshold
-		var anchors := _points_to_positions(player_spawns)
+		# DERIVED, NOT CHOSEN: a sightline is only "open" if something can
+		# shoot down it, so the reach comes from the enemy's laser range.
+		map_sampler.sightline_limit_m = scenario.enemy_laser_range
+		# BOUNDS FROM THE GEOMETRY, not from the markers. The anchor list was
+		# player spawns + enemy spawns + route points, so the sampled region
+		# was the bounding box of somebody's gameplay placement plus 4 m, and
+		# any part of the level outside that box was never looked at.
+		var anchors := _geometry_anchors()
+		anchors.append_array(_points_to_positions(player_spawns))
 		anchors.append_array(_points_to_positions(enemy_spawns))
 		anchors.append_array(_points_to_positions(route_points))
-		sightline_data = map_sampler.sample_map(
-			get_world_3d(), navigation_available,
-			_points_to_positions(enemy_spawns), anchors)
+		if not anchors.is_empty():
+			sightline_data = map_sampler.sample_map(
+				get_world_3d(), navigation_available,
+				_points_to_positions(enemy_spawns), anchors)
 		if not sightline_data.is_empty():
-			print("[LT] Sampled %d positions: %.0f%% blind, %.0f%% overexposed" % [
+			var head: String = ("[LT] Sampled %d positions: %.0f%% have cover,"
+				+ " %.0f%% open on all sides, %.1f/%d approaches open"
+				+ " within %.0f m") % [
 				sightline_data["total_samples"],
-				sightline_data["blind_fraction"] * 100.0,
-				sightline_data["overexposed_fraction"] * 100.0])
+				sightline_data["has_cover_fraction"] * 100.0,
+				sightline_data["fully_open_fraction"] * 100.0,
+				sightline_data["avg_open_directions"],
+				sightline_data["ray_directions"],
+				sightline_data["sightline_limit_m"]]
+			print(head)
+			if sightline_data.has("overexposed_fraction"):
+				print("[LT]   against enemy spawns: %.0f%% blind, %.0f%% overexposed" % [
+					sightline_data["blind_fraction"] * 100.0,
+					sightline_data["overexposed_fraction"] * 100.0])
+			else:
+				print("[LT]   no enemy spawns -- spawn-relative exposure not measured")
 
 	for i in scenario.run_count:
 		if scenario.random_seed != 0:
@@ -752,3 +778,27 @@ func _print_manual_summary() -> void:
 	print("[LT] Run %d ended (%s): shots %d, hit %d, blocked %d, enemies killed %d, deaths %d" % [
 		run["run_id"], run["end_reason"], run["shots_fired"], run["shots_hit"],
 		run["shots_blocked"], run["enemy_deaths"], run["player_deaths"]])
+
+func _geometry_anchors() -> Array[Vector3]:
+	"""Corners of the level's visual bounding box, so the sample grid covers
+	the LEVEL rather than the bounding box of its gameplay markers.
+
+	Two corners are enough -- `LT_MapSampler._bounds_from` grows an AABB
+	through every anchor it is given.
+	"""
+	var out: Array[Vector3] = []
+	var merged := AABB()
+	var seen := false
+	var root: Node = get_parent() if get_parent() != null else self
+	for child in root.find_children("*", "MeshInstance3D", true, false):
+		var mesh_instance: MeshInstance3D = child
+		var box: AABB = mesh_instance.global_transform * mesh_instance.get_aabb()
+		if not seen:
+			merged = box
+			seen = true
+		else:
+			merged = merged.merge(box)
+	if seen:
+		out.append(merged.position)
+		out.append(merged.end)
+	return out

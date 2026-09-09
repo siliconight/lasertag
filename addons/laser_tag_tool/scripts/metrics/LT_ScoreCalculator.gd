@@ -149,8 +149,14 @@ func _score_sightlines(summary: Dictionary, sightline_data: Dictionary,
 		var blind_fraction: float = sightline_data.get("blind_fraction", 0.0)
 		var threshold: int = sightline_data.get("overexposed_threshold", 3)
 
+		# INFORMATIONAL NOW, NOT A DEDUCTION. This number says how much of the
+		# level six particular markers can see, so it moves when somebody
+		# nudges a spawn and says nothing about the level's cover. The points
+		# come off `peer_exposed_fraction` below instead, which asks the same
+		# question of the geometry. Kept and still reported, because it
+		# becomes meaningful again the moment a real gameplay layer supplies
+		# considered spawns.
 		if overexposed_fraction > 0.15:
-			score -= 10
 			var worst: Array = sightline_data.get("worst_overexposed", [])
 			var where := ""
 			var finding := _finding("WARN", "OVEREXPOSED_ZONE",
@@ -167,11 +173,43 @@ func _score_sightlines(summary: Dictionary, sightline_data: Dictionary,
 				"Only %d%% of positions are overexposed." % int(overexposed_fraction * 100)))
 
 		if blind_fraction > 0.5:
-			score -= 10
 			findings.append(_finding("WARN", "BLIND_MAP",
 				("%d%% of positions can never be seen from any enemy spawn" +
 				" — enemies may rarely get line of sight.") % int(blind_fraction * 100)))
-	else:
+	# THE LEVEL'S OWN COVER, which is what this category is supposed to score.
+	# Needs no spawns, so it survives the gameplay layer moving out.
+	# COVER, ASKED OF THE GEOMETRY. `has_cover_fraction` is the share of
+	# positions with at least half their 8 directions blocked inside weapon
+	# range -- somewhere to put your back. The earlier draft of this scored
+	# `peer_exposed_fraction` against a 0.25 cut, which measured 0.248 as the
+	# mean on the first site it ran on: the threshold was the average, so
+	# "exposed" meant "above average" and the result was arithmetic rather
+	# than a reading. Peer exposure is still reported; it no longer decides.
+	if sightline_data.has("has_cover_fraction"):
+		var has_cover: float = sightline_data["has_cover_fraction"]
+		var fully_open: float = sightline_data["fully_open_fraction"]
+		var reach: float = sightline_data.get("sightline_limit_m", 35.0)
+		if fully_open > 0.5:
+			score -= 15
+			var worst_peer: Array = sightline_data.get("worst_peer_exposed", [])
+			var peer_finding := _finding("WARN", "NO_COVER",
+				("%d%% of walkable positions have no occluder in ANY direction"
+				+ " within %d m -- nothing to break a sightline anywhere.") % [
+					int(fully_open * 100), int(reach)])
+			if not worst_peer.is_empty():
+				peer_finding["position"] = worst_peer[0]["position"]
+			findings.append(peer_finding)
+		elif has_cover < 0.25:
+			score -= 5
+			findings.append(_finding("WARN", "THIN_COVER",
+				("Only %d%% of positions have half their approaches blocked"
+				+ " within %d m.") % [int(has_cover * 100), int(reach)]))
+		else:
+			findings.append(_finding("PASS", "COVER",
+				"%d%% of positions have real cover; %d%% are open on all sides." % [
+					int(has_cover * 100), int(fully_open * 100)]))
+
+	if sightline_data.is_empty():
 		# Fallback heuristics from engagement data only.
 		if enemy_kills_per_run < 0.5:
 			score -= 10

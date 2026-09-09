@@ -96,6 +96,19 @@ jobs:
           ~/godot/godot --headless --path . \
             -s res://addons/laser_tag_tool/runners/test_report_findings.gd
 
+      # EVERY TEST IN THE TREE, not a hand-listed subset. Only the step above
+      # ran in CI, so test_pill_wiring.gd and everything under runners/tests --
+      # including the traversal-under-fire guard added for roadmap 121 --
+      # existed without ever being executed. A test that never runs is weaker
+      # than no test, because it reads as coverage.
+      - name: Runner tests
+        run: |
+          set -e
+          for t in addons/laser_tag_tool/runners/test_pill_wiring.gd addons/laser_tag_tool/runners/tests/*.gd; do
+            echo "--- $t"
+            ~/godot/godot --headless --path . -s "res://$t"
+          done
+
       - name: Run demo greybox evaluation
         id: eval
         run: |
