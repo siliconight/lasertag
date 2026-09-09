@@ -670,8 +670,10 @@ func run_evaluation(eval_scenario: LT_TestScenario) -> Dictionary:
 	metrics.record_debug_events = scenario.record_debug_events
 	debug_laser.enabled = false
 
-	await _await_navigation_sync()
+	# HOOKS FIRST: `_navigation_ready` probes the navmesh near the player
+	# spawn, so it can only ask the real question once the spawns are known.
 	discover_hooks(get_parent())
+	await _await_navigation_sync()
 	var valid := validate_map()
 	if not valid:
 		_last_score = score_calculator.calculate({}, scenario, validation_findings)
@@ -754,10 +756,34 @@ func write_reports(json_path: String, map_name: String, scenario_name: String,
 	print("")
 	print("[LT] JSON report: %s" % ProjectSettings.globalize_path(json_path))
 
+## Frames to wait for the navigation server before giving up on it.
+##
+## Was a flat 3. `_navigation_ready` already forces a synchronous server update
+## and its comment says readiness "doesn't depend on how many frames happened
+## to elapse since the bake" -- but the WAIT in front of it was still a frame
+## count, so the guarantee stopped at the door. Measured 2026-09-09: 2 of 30
+## reports in one session came back NAVIGATION_MISSING immediately after
+## logging a successful 477-polygon bake, and a run that loses navigation falls
+## back to direct movement and reports 240 stuck events, zero shots and
+## NO_ENGAGEMENT -- which reads as a catastrophic level rather than a race.
+##
+## 30 frames is half a second at 60 Hz and costs nothing when the map is ready
+## on the first, which it was in all 16 reproduction attempts.
+const NAV_SYNC_MAX_FRAMES := 30
+
 func _await_navigation_sync() -> void:
-	# Navigation maps sync on the server a few frames after scene load.
-	for i in 3:
+	# Wait for the CONDITION, not for a fixed number of frames, and say so when
+	# it took more than one -- a silent race is the thing that made this
+	# expensive to find.
+	for i in NAV_SYNC_MAX_FRAMES:
+		if _navigation_ready():
+			if i > 0:
+				print("[LT] navigation ready after %d extra frame(s)" % i)
+			return
 		await get_tree().physics_frame
+	push_warning(("[LT] navigation still not ready after %d frames; the "
+		+ "evaluation will fall back to direct movement.")
+		% NAV_SYNC_MAX_FRAMES)
 
 ## ---- HUD ----
 

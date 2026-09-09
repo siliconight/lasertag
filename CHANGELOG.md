@@ -1,5 +1,38 @@
 # Changelog
 
+## [0.15.0] - wait for navigation to be ready, not for three frames
+
+### Changed
+- `_await_navigation_sync` waits for `_navigation_ready()` to be true, up to
+  `NAV_SYNC_MAX_FRAMES` (30), instead of awaiting a flat 3 physics frames. It
+  prints how many extra frames it needed when that is more than zero, and
+  warns if the budget runs out.
+
+  `_navigation_ready` already forces a synchronous server update and its
+  comment says readiness "doesn't depend on how many frames happened to elapse
+  since the bake" -- but the WAIT in front of it was still a frame count, so
+  the guarantee stopped at the door.
+
+- `discover_hooks` now runs BEFORE that wait. `_navigation_ready` probes the
+  navmesh near the player spawn, so it could only ask its real question after
+  the hooks were known, and it was being called first with no spawns to probe.
+
+### Known
+- WHAT THIS DOES NOT CLAIM. The failure it targets -- `NAVIGATION_MISSING`
+  immediately after a successful 477-polygon bake -- was NOT reproduced in 16
+  consecutive attempts, all of which passed with `iter=2 regions=1` and a
+  spawn-probe distance of 0.750 against a 3.0 limit. It appeared in 2 of 30
+  reports across one session, and a run that loses navigation falls back to
+  direct movement and reports 240 stuck events, zero shots and NO_ENGAGEMENT,
+  which reads as a catastrophic level rather than a race. So this is a
+  robustness change against a failure mode that is real and measured but whose
+  trigger is not identified, and it cannot be said to have fixed it.
+
+- Polling the condition gives 0, 1 or 2 frames in most runs and up to 26 in
+  others, which is the variance the flat 3 was assuming away. The figures move
+  when the poll prints -- printing each frame changes the timing -- so treat
+  the exact counts as an order of magnitude and not a measurement.
+
 ## [0.14.0] - a run's pills are gone before the next run starts
 
 Roadmap 125, which 0.13.0 named as known and unexplained.
