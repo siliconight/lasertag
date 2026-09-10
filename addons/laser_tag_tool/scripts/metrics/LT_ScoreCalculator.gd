@@ -81,32 +81,44 @@ static func grade_for(score: int) -> String:
 	return "BROKEN"
 
 ## Traversal: 25 points (TDD §18.2)
+## Traversal: 25 points, scored on HOW FAR THE CREW GOT (roadmap 128).
+##
+## This was a three-band step on `route_completion_rate`, a boolean averaged,
+## so a crew that walked 65% of its route scored exactly what a crew wiped on
+## the spawn scored: nothing. 0.19.0 put the fraction in the finding's text and
+## left the number alone, which made the zero interpretable and still let it
+## drive the grade. This reads the fraction.
+##
+## `route_progress_rate` is the mean fraction of route points reached, over
+## runs that HAD a route -- and it is 1.00 exactly when every run finished, so
+## it subsumes the old top band rather than sitting beside it. The bands
+## survive as the finding's SEVERITY, because a reader wants "is this a
+## problem" and not only a number.
+##
+## The -1.0 fallback is a run recorded before 0.19.0 published the field. Those
+## keep the old behaviour rather than silently scoring zero.
 func _score_traversal(summary: Dictionary, findings: Array[Dictionary]) -> int:
-	var score := 0
 	var completion_rate: float = summary.get("route_completion_rate", 0.0)
+	var progress: float = summary.get("route_progress_rate", -1.0)
+	var walked: float = progress if progress >= 0.0 else completion_rate
+	var score := int(round(25.0 * clampf(walked, 0.0, 1.0)))
 
-	if completion_rate >= 0.9:
-		score = 25
+	var detail: String = ""
+	if progress >= 0.0 and absf(progress - completion_rate) > 0.005:
+		detail = (" It FINISHED in %d%% of runs; the score reads how far it"
+			+ " got, not how often it arrived.") % int(completion_rate * 100)
+	if walked >= 0.9:
 		findings.append(_finding("PASS", "TRAVERSAL",
-			"Bot completed the route in %d%% of runs." % int(completion_rate * 100)))
-	elif completion_rate >= 0.5:
-		score = 15
+			("Bot walked %d%% of the route on average." % int(walked * 100))
+			+ detail))
+	elif walked >= 0.5:
 		findings.append(_finding("WARN", "TRAVERSAL",
-			"Bot completed the route in only %d%% of runs." % int(completion_rate * 100)))
+			("Bot walked only %d%% of the route on average." % int(walked * 100))
+			+ detail))
 	else:
-		score = 0
-		# SAY HOW FAR IT GOT, because the boolean cannot (roadmap 128). A run
-		# that ends on ENEMIES_CLEARED at waypoint 2 of 3 is recorded here as
-		# the same zero as a crew wiped on the spawn, and the difference is the
-		# whole reading. The SCORE is unchanged -- this only stops the sentence
-		# beside it from being uninterpretable.
-		var progress: float = summary.get("route_progress_rate", -1.0)
-		var msg: String = ("Bot rarely completed the route (%d%% of runs)."
-			% int(completion_rate * 100))
-		if progress >= 0.0:
-			msg += (" It reached %d%% of the route's points on average, so the"
-				+ " zero above is how often it FINISHED, not how far it got.") 				% int(progress * 100)
-		findings.append(_finding("FAIL", "TRAVERSAL", msg))
+		findings.append(_finding("FAIL", "TRAVERSAL",
+			("Bot walked %d%% of the route on average." % int(walked * 100))
+			+ detail))
 
 	var player_stuck: int = summary.get("player_stuck_events", 0)
 	if player_stuck > 0:
@@ -134,7 +146,20 @@ func _score_pathing(summary: Dictionary, unreachable_spawns: int,
 	# question is whether the AVERAGE GUARD is jamming (roadmap 132).
 	var per_enemy: float = float(summary.get("enemy_stuck_per_enemy_run", 0.0))
 	if stuck_per_run > 0.25:
-		var penalty := mini(int(stuck_per_run * 8.0), 10)
+		# THE PENALTY SCALES WITH THE RATE, AND THE CAP IS GONE (roadmap 128,
+		# raised by 132). It was `mini(int(stuck_per_run * 8.0), 10)` -- half
+		# this category -- so a map whose every guard jams in every run cost
+		# the same ten points as one with a sticky corner, and
+		# `county_hospital_001` scored 80 PASS_WITH_TUNING while stranding its
+		# guards at 0.71 per enemy per run.
+		#
+		# Per enemy per run, so it means the same on two maps, and 1.0 -- the
+		# average guard jamming once per run -- takes the whole 20. A category
+		# called NPC Pathing should be able to read zero when the NPCs cannot
+		# path.
+		var penalty: int = mini(int(stuck_per_run * 8.0), 10)
+		if per_enemy > 0.0:
+			penalty = int(round(20.0 * minf(1.0, per_enemy)))
 		score -= penalty
 		# ONE FINDING, TWO DIFFERENT FACTS, and they were being reported as the
 		# same one. A sticky corner and a map the enemy side cannot cross both

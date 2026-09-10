@@ -58,6 +58,12 @@ var sightline_data: Dictionary = {}
 
 var _run_counter: int = 0
 var _live_pills: Array[Node] = []
+## Per-run, and reset in `start_run` rather than at the end of the previous
+## one: `_clear_pills` and `start_run` happen inside a single frame (see the
+## comment there), so anything cleared on the way out can be set again on the
+## way in by a pill that has not stopped processing yet.
+var _enemies_cleared: bool = false
+var _route_walked: bool = false
 var _headless: bool = false
 var _last_score: Dictionary = {}
 
@@ -561,6 +567,11 @@ func _configure_player(pill: Node, bot: bool) -> void:
 		bot_controller.sight_range = scenario.player_sight_range
 		bot_controller.advance_while_engaging = scenario.advance_while_engaging
 		bot_controller.engaged_move_speed_scale = scenario.engaged_move_speed_scale
+		# THE SIGNAL THE BOT HAS ALWAYS EMITTED AND NOTHING LISTENED TO
+		# (roadmap 128). `route_completed` was declared, emitted at the end of
+		# the route, and connected by no one -- so finishing the route was
+		# recorded in the metrics and could not end the run.
+		bot_controller.route_completed.connect(_on_route_walked)
 		bot_controller.start_route(_bot_route(), _points_to_positions(cover_points))
 	else:
 		bot_controller.set_physics_process(false)
@@ -656,9 +667,15 @@ func _start_manual_run() -> void:
 
 func start_run(bot: bool) -> void:
 	_run_counter += 1
+	_enemies_cleared = false
+	_route_walked = false
 	metrics.begin_run(_run_counter, scenario.player_count if bot else 1, scenario.enemy_count)
 	spawn_players(bot)
 	spawn_enemies()
+	# A run with no enemies at all is already cleared, and nothing will ever
+	# say so -- `_check_enemies_cleared` is only reached from a death.
+	if get_tree().get_nodes_in_group(LT_Const.GROUP_ENEMY).is_empty():
+		_enemies_cleared = true
 	run_state.start_run(_run_counter, scenario.max_run_time_seconds)
 
 func stop_run(reason: LT_RunState.EndReason = LT_RunState.EndReason.MANUAL) -> void:
@@ -715,11 +732,58 @@ func _on_player_died(pill: Node) -> void:
 		metrics.record_event("TeamWipe", {})
 		run_state.end_run(LT_RunState.EndReason.TEAM_WIPE)
 
+## A run ends when there is NOTHING LEFT TO DO, not when one of the two things
+## is done (roadmap 128).
+##
+## This used to end the run the instant the last guard fell. On
+## `restaurant_row_001` seed 9003 at one and two enemies the crew WON --
+## `enemy_deaths` 2 of 2, `player_deaths` 0 -- about seven seconds in, against
+## a 130 m route that takes 32.5 s to walk at 4.0 m/s. The crew never got to
+## start, and `route_completion_rate` recorded that as the same 0.00 it gives
+## a crew wiped on the spawn.
+##
+## SO THE TRAVERSAL CATEGORY WAS UNREACHABLE IN A POPULATED RUN, BY
+## CONSTRUCTION. Lose and it is TEAM_WIPE; win and it was ENEMIES_CLEARED;
+## neither and it is TIMEOUT -- but the bot stops advancing the moment it sees
+## a guard, so route completion required enemies alive, unseen and unengaged
+## for 32 consecutive seconds. That is not a property of a level and no brief
+## asks for it.
+##
+## The two halves have to move together. Deferring the end without also ending
+## on route completion would leave a finished crew standing in an empty level
+## until the 180 s clock ran out -- 25 runs of that per candidate is the cost
+## the item weighed and did not want to pay.
 func _check_enemies_cleared() -> void:
 	for enemy in get_tree().get_nodes_in_group(LT_Const.GROUP_ENEMY):
 		if enemy.has_node("LT_Health") and not (enemy.get_node("LT_Health") as LT_Health).is_dead:
 			return
+	_enemies_cleared = true
+	if _route_outstanding():
+		return
 	run_state.end_run(LT_RunState.EndReason.ENEMIES_CLEARED)
+
+## True while a route is defined and no crew member has finished it.
+##
+## `route_points.size() <= 1` is not a route: Lot emits `Route_0` at the crew
+## spawn exactly -- measured 0.00 m apart -- so a one-point route is already
+## walked at t=0 and waiting for it would hang the run.
+func _route_outstanding() -> bool:
+	if _route_walked:
+		return false
+	for pill in _live_pills:
+		var bot: LT_BotPlayerController = pill.get_node_or_null(
+			"LT_BotPlayerController")
+		if bot != null and bot.route_points.size() > 1:
+			return true
+	return false
+
+## The crew finished the route. Ends the run when the guards are already down,
+## and otherwise lets the fight carry on -- a crew that reaches extraction with
+## guards still standing has not finished the mission.
+func _on_route_walked() -> void:
+	_route_walked = true
+	if _enemies_cleared:
+		run_state.end_run(LT_RunState.EndReason.OBJECTIVE)
 
 func _on_run_ended(_run_id: int, reason: String) -> void:
 	metrics.end_run(reason)

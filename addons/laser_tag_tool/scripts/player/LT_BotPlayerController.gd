@@ -223,9 +223,18 @@ func _advance_route(_delta: float) -> void:
 		if _route_index >= route_points.size():
 			_completed = true
 			_stop_horizontal()
-			route_completed.emit()
+			# RECORD BEFORE NOTIFYING (roadmap 128). `route_completed` is now
+			# connected -- `LT_MapEvalHarness._on_route_walked` ends the run on
+			# it when the guards are already down -- and a Godot signal is
+			# delivered SYNCHRONOUSLY. Emitting first therefore closed the run
+			# inside this line, and `record_event` returns early on a closed
+			# run, so `ObjectiveReached` landed nowhere and
+			# `route_completion_rate` read 0.00 on a route the crew had just
+			# finished walking. Measured: `ObjectiveReached` 24 -> 0 on
+			# restaurant_row_001 seed 9003 with no enemies at all.
 			get_tree().call_group(LT_Const.GROUP_METRICS, "record_event",
 				"ObjectiveReached", {"source": body.name})
+			route_completed.emit()
 			return
 		_go_to_current_route_point()
 

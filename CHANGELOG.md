@@ -1,5 +1,93 @@
 # Changelog
 
+## [0.22.0] - a run ends when there is nothing left to do
+
+Roadmap 128, both halves, and 132's residue with them.
+
+### The run boundary
+A run ended the instant the last guard fell. On `restaurant_row_001` seed 9003
+the crew WON about seven seconds in against a 130 m route that takes 32.5 s to
+walk, so **the traversal category was unreachable in a populated run by
+construction**: lose and it is TEAM_WIPE, win and it was ENEMIES_CLEARED,
+neither and it is TIMEOUT -- but the bot stops advancing the moment it sees a
+guard, so completion required enemies alive, unseen and unengaged for 32
+consecutive seconds.
+
+The item weighed deferring the end and balked at the cost: a crew that wins at
+7 s would then stand in an empty level until the 180 s clock ran out. **So the
+rule is neither.** A run now ends when there is nothing left to do:
+
+- guards down, route still to walk -> the run continues
+- route walked, guards still standing -> the run continues; a crew that reaches
+  extraction leaving the map defended has not finished the mission
+- both -> `OBJECTIVE`, immediately
+
+Two things had to be fixed to make that work, and both were live traps.
+
+- **`route_completed` was a signal nothing listened to.** The bot declared it,
+  emitted it at the end of the route, and no one connected it -- so finishing
+  the route was recorded in the metrics and could not end a run.
+- **A run with no enemies is already cleared and nothing would ever say so**;
+  `_check_enemies_cleared` is only reached from a death. Seeded at spawn.
+
+### The ordering bug this created, kept because it cost a whole sweep
+The first measurement came back with `route_completion_rate` **0.00 at zero
+enemies**, where it had been 1.00. Godot delivers a signal SYNCHRONOUSLY, so
+`route_completed.emit()` ran the harness's handler inside that line, closed the
+run, and the `ObjectiveReached` metrics event on the NEXT line landed in a
+closed run -- `record_event` returns early on one. Measured: `ObjectiveReached`
+24 -> 0. The bot now records before it notifies.
+
+### The score reads the measurements
+- **Traversal** is scored on `route_progress_rate`, the fraction of the route
+  walked, instead of a three-band step on a boolean average. A crew that walked
+  65% of its route scored what a crew wiped on the spawn scored: nothing.
+  Progress is 1.00 exactly when every run finished, so it subsumes the old top
+  band; the bands survive as the finding's severity. A report from before
+  0.19.0 published the field falls back to completion rather than scoring zero.
+- **NPC Pathing** loses its penalty cap (roadmap 132's residue). It was
+  `mini(int(stuck_per_run * 8.0), 10)` -- half the category -- so a map whose
+  every guard jams in every run cost the same ten points as one with a sticky
+  corner. It now scales on `enemy_stuck_per_enemy_run`, and 1.0 takes the whole
+  20: **a category called NPC Pathing can now read zero when the NPCs cannot
+  path.**
+
+### Measured
+`restaurant_row_001` seed 9003, the item's own sweep, 6 runs per cell, crew 4,
+the addon the only variable:
+
+```
+enemies   BEFORE                      AFTER
+          compl progr score  secs     compl progr score  secs
+0          1.00  1.00    45  273.6     1.00  1.00    45   48.5
+1          0.00  0.33    75   11.0     1.00  1.00   100   50.0
+2          0.00  0.33    75   13.3     1.00  1.00   100   50.9
+4          0.00  0.33    65   16.8     1.00  1.00    80   53.0
+6          0.00  0.33    65   20.0     1.00  1.00    90   55.0
+```
+
+**Completion goes 0.00 to 1.00 at every populated enemy count** -- the metric is
+reachable in a fight for the first time. The zero-enemy row is unchanged at
+45/1.00/1.00, so nothing regressed on the row that already worked.
+
+**AND THE SWEEP GOT FASTER.** 334.7 s to 257.4 s, 23% down. The item feared
+paying for longer runs and the opposite happened: populated runs cost 3-5x more
+(11-20 s to 50-55 s) and the zero-enemy row fell 5.6x, from burning the full
+clock to ending on `OBJECTIVE`.
+
+A wipe-heavy map is untouched: `warehouse_yard_001` seed 9004 at crew 1,
+9.1 s -> 9.0 s, completion 0.00, progress 0.00, score 50. A crew wiped on the
+spawn still ends promptly and scores the same.
+
+### What this exposes rather than fixes
+At one and two enemies the map now scores **100 PASS**. Four crew against one
+guard is a trivial encounter and the rubric does not notice; it scored 75 before
+only because a quarter of the rubric was unreachable. Both readings of traversal
+are correct and the gap is elsewhere -- nothing scores "this encounter was not
+a contest". The slope is at least the right way round (4 enemies 80, 6 enemies
+90 -- non-monotonic at 6 runs per cell, which is sample noise), but it is
+shallow, and that is now the most visible thing wrong with the score.
+
 ## [0.21.0] - a stuck count with its units on
 
 Roadmap 132. Cold run 9005 produced three candidates that completed the route
