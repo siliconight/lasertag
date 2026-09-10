@@ -1,5 +1,55 @@
 # Changelog
 
+## [0.17.0] - the navigation wait is a clock, and ZERO is not a coordinate
+
+Roadmap 126: `validate_map` reported NAVIGATION_MISSING on about 7% of
+evaluations, immediately after logging a successful bake. Two causes, and the
+first hid the second.
+
+### Fixed
+- `_await_navigation_sync` is bounded in MILLISECONDS (`NAV_SYNC_MAX_MSEC`,
+  2000) rather than by a frame count. `await get_tree().physics_frame` in a
+  headless SceneTree does not pace to 60 Hz -- it spins.
+
+        30 physics frames, inside run_map_eval        1 ms
+        30 physics frames, in a bare SceneTree      ~490 ms
+        the navigation server's own sync           14-28 ms
+
+  So the original flat 3-frame wait was about 0.1 ms and 0.15.0's 30-frame
+  replacement about 1 ms; neither was a wait. Whether the map read as ready
+  came down to how much wall time happened to pass doing other work, which is
+  the coin flip the 7% was. The frame cap survives at 3000 purely as a
+  runaway guard.
+
+- `_navigation_ready` refuses a closest point of exactly `Vector3.ZERO` while
+  the probe is not itself at the origin. Before its first sync
+  `map_get_closest_point` returns ZERO, which is a plausible-looking
+  coordinate rather than an error: measured on restaurant_row_001, iteration 1
+  answered (0,0,0) against a spawn at (0, 1, -23) and the probe read it as
+  "the navmesh is 23 m away".
+
+  IT CUTS BOTH WAYS, which is why it is tested rather than left to the
+  distance. On a map whose crew spawn sits near the world origin the same
+  unsynced ZERO measures ~1 m and would have reported READY on a navigation
+  map that had not been built.
+
+### Measured
+        NAVIGATION_MISSING   2 of 30 before   ->   0 of 20 after
+        wait budget exhausted     16 of 20    ->   0 of 20
+        observed wait times                        14-28 ms
+
+  The 16-of-20 figure is 0.15.0's own warning firing on runs that were fine --
+  a fix that cried wolf four times in five, which is how the millisecond
+  measurement got taken at all.
+
+### Added
+- `runners/tests/test_nav_wait_is_a_clock.gd`. It pins the PREMISE rather than
+  the fix: if a future Godot paces `physics_frame`, a frame count becomes a
+  clock again and this analysis changes. Its first version asserted "30 frames
+  < 100 ms" and failed at 480 ms in a bare SceneTree -- the spread IS the
+  finding, so the timing is now printed and the assertions are on the things
+  that hold: that the wait reads a millisecond clock, and the ZERO arithmetic.
+
 ## [0.16.0] - the sampled region is the level, not the marker spread
 
 ### Fixed

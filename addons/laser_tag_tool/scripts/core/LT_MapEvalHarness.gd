@@ -357,6 +357,18 @@ func _navigation_ready() -> bool:
 	var probe := player_spawns[0].global_position \
 		if not player_spawns.is_empty() else global_position
 	var closest := NavigationServer3D.map_get_closest_point(map_rid, probe)
+	# ZERO IS THE SERVER SAYING "NOT YET", NOT A COORDINATE. Before the map's
+	# first sync `map_get_closest_point` returns exactly `Vector3.ZERO`, which
+	# is a plausible-looking answer rather than an error -- measured on
+	# restaurant_row_001, iteration 1 returned (0,0,0) against a spawn at
+	# (0, 1, -23) and this check read it as "the navmesh is 23 m away".
+	#
+	# It also cuts the other way, which is why it is tested rather than left to
+	# the distance: a map whose crew spawn sits near the world origin would
+	# have measured that same unsynced ZERO as 1 m away and reported READY on a
+	# navigation map that had not been built yet.
+	if closest == Vector3.ZERO and probe != Vector3.ZERO:
+		return false
 	return closest.distance_to(probe) < 3.0
 
 func _spawn_can_reach(from_position: Vector3, to_position: Vector3) -> bool:
@@ -778,23 +790,38 @@ func write_reports(json_path: String, map_name: String, scenario_name: String,
 ## back to direct movement and reports 240 stuck events, zero shots and
 ## NO_ENGAGEMENT -- which reads as a catastrophic level rather than a race.
 ##
-## 30 frames is half a second at 60 Hz and costs nothing when the map is ready
-## on the first, which it was in all 16 reproduction attempts.
-const NAV_SYNC_MAX_FRAMES := 30
+## FRAMES ARE NOT A CLOCK HERE, which is what made this take three attempts.
+## `await get_tree().physics_frame` in a headless SceneTree script does not
+## pace to 60 Hz -- it spins. Measured: 30 frames elapse in 1 ms, and one run
+## in six took 21 ms for 28. So the original flat 3-frame wait was about a
+## tenth of a millisecond and the 30-frame version was about one, while the
+## navigation server's sync is bound by WALL TIME. Whether the map read as
+## ready came down to how much real time happened to pass doing other work,
+## which is a coin flip, which is the ~7% in roadmap 126.
+##
+## Both bounds are kept: the millisecond budget is what actually waits, and the
+## frame cap stops a spinning loop from running unbounded if the clock is
+## broken instead.
+const NAV_SYNC_MAX_FRAMES := 3000
+const NAV_SYNC_MAX_MSEC := 2000
 
 func _await_navigation_sync() -> void:
 	# Wait for the CONDITION, not for a fixed number of frames, and say so when
 	# it took more than one -- a silent race is the thing that made this
 	# expensive to find.
+	var started: int = Time.get_ticks_msec()
 	for i in NAV_SYNC_MAX_FRAMES:
 		if _navigation_ready():
-			if i > 0:
-				print("[LT] navigation ready after %d extra frame(s)" % i)
+			var waited: int = Time.get_ticks_msec() - started
+			if waited > 0:
+				print("[LT] navigation ready after %d ms (%d frames)" % [waited, i])
 			return
+		if Time.get_ticks_msec() - started >= NAV_SYNC_MAX_MSEC:
+			break
 		await get_tree().physics_frame
-	push_warning(("[LT] navigation still not ready after %d frames; the "
-		+ "evaluation will fall back to direct movement.")
-		% NAV_SYNC_MAX_FRAMES)
+	push_warning(("[LT] navigation still not ready after %d ms; the evaluation "
+		+ "will fall back to direct movement.")
+		% (Time.get_ticks_msec() - started))
 
 ## ---- HUD ----
 
