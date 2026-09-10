@@ -1,5 +1,59 @@
 # Changelog
 
+## [0.23.0] - a run that never threatened the crew cannot certify the map
+
+The gap 0.22.0 exposed. Once roadmap 128 made the traversal category reachable,
+`restaurant_row_001` seed 9003 scored **100 PASS** with four crew against one
+guard. Every category read correctly; nothing anywhere asked whether the
+encounter had been a contest. It had scored 75 before only because a quarter of
+the rubric was unreachable, which is not a safeguard -- it is a broken
+instrument accidentally pointing the right way.
+
+### Added
+- `TRIVIAL_ENCOUNTER`, a FAIL, and a cap at 89 -- one below the PASS band.
+
+  **The test is threshold-free: the crew lost NOBODY.** Not "few deaths", not a
+  rate; zero, across every run in the sweep. Six runs at crew 4 is 24 crew
+  lives, twenty-five is 100, none of them spent.
+
+  **It caps the grade rather than docking points.** A deduction would be a
+  claim about how much worse the map is, and this says nothing about the map --
+  the geometry may be excellent. What the run cannot support is the sentence
+  PASS means: that the level was exercised and held up. A map that earns PASS
+  on a contested encounter still gets it, and a run already below the cap does
+  not move.
+
+  Zero enemies is exempt on purpose. A walkthrough is a legitimate thing to
+  measure -- it is how route completion was first proved to work at all -- and
+  capping it would mark down the one configuration that was never in question.
+
+### Measured
+`restaurant_row_001` seed 9003, crew 4, 6 runs per cell, against 0.22.0:
+
+```
+enemies   BEFORE                     AFTER
+          compl progr score  secs    compl progr score  secs
+1          1.00  1.00   100   49.8    1.00  1.00    89   50.0
+4          1.00  1.00    80   52.7    1.00  1.00    80   52.6
+6          1.00  1.00    90   54.4    1.00  1.00    89   54.1
+```
+
+One enemy drops out of PASS. Four is unchanged, already below the cap. **Six
+also caps**, which is the finding rather than an over-reach: this crew loses
+nobody against six guards either, so the encounter is not a contest at any
+count the map was tried at.
+
+A map that fights back is untouched, and that was checked rather than assumed:
+`county_hospital_001` seed 9005 put 47 crew members down and
+`warehouse_yard_001` at crew 1 was wiped in every run. One death is enough --
+the test is that the map CAN kill, not how often.
+
+### What was tried first and does not work
+`player_deaths` is 0 at one, two AND four enemies on this map, so "trivial" is
+not about the guard count -- four crew are simply dominant here. A force-ratio
+rule would also have been grading the BRIEF rather than the map, which is the
+line spawn-derived measures are not supposed to cross.
+
 ## [0.22.0] - a run ends when there is nothing left to do
 
 Roadmap 128, both halves, and 132's residue with them.

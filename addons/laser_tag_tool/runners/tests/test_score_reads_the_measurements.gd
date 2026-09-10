@@ -127,6 +127,56 @@ func _init() -> void:
 		"route_progress_rate": 0.1, "player_stuck_events": 3}) == 0,
 		"a barely-moving crew that also jams floors at zero, not below")
 
+	print("[8] a run that never threatened the crew cannot certify the map")
+	# restaurant_row_001 seed 9003, crew 4 against one guard, scored 100 PASS
+	# once roadmap 128 made traversal reachable. Every category read correctly
+	# and nothing asked whether the encounter had been a contest.
+	var scen := LT_TestScenario.new()
+	scen.enemy_count = 1
+	var perfect := summary_of({"runs": 6, "player_deaths": 0,
+		"route_completion_rate": 1.0, "route_progress_rate": 1.0,
+		"shots_fired": 56, "avg_time_to_first_enemy_shot": 4.58,
+		"avg_player_survival_seconds": 30.9})
+	var f1: Array[Dictionary] = []
+	var got: int = calc._cap_for_a_trivial_encounter(perfect, scen, 100, f1)
+	print("     100 -> %d, grade %s" % [got, LT_ScoreCalculator.grade_for(got)])
+	check(got == 89, "held one below the PASS band")
+	check(LT_ScoreCalculator.grade_for(got) == "PASS_WITH_TUNING",
+		"so it cannot read PASS")
+	check(f1.size() == 1 and f1[0].get("type", "") == "TRIVIAL_ENCOUNTER",
+		"and it says why")
+
+	print("[9] a map that fights back is untouched")
+	# county_hospital_001 seed 9005 put 47 crew members down; warehouse_yard
+	# at crew 1 was wiped in every run. One death is enough -- the test is that
+	# the map CAN kill, not how often.
+	var contested := summary_of({"runs": 25, "player_deaths": 47})
+	var f2: Array[Dictionary] = []
+	check(calc._cap_for_a_trivial_encounter(contested, scen, 100, f2) == 100,
+		"a contested run keeps its score")
+	check(f2.is_empty(), "and files no finding")
+	var f3: Array[Dictionary] = []
+	check(calc._cap_for_a_trivial_encounter(summary_of({"runs": 25,
+		"player_deaths": 1}), scen, 95, f3) == 95, "one death is enough")
+
+	print("[10] a scenario with no guards has no encounter to be trivial")
+	# A walkthrough is a legitimate thing to measure -- it is how route
+	# completion was first proved to work at all -- and capping it would mark
+	# down the one configuration that was never in question.
+	var empty := LT_TestScenario.new()
+	empty.enemy_count = 0
+	var f4: Array[Dictionary] = []
+	check(calc._cap_for_a_trivial_encounter(summary_of({"runs": 6,
+		"player_deaths": 0}), empty, 100, f4) == 100, "zero enemies is exempt")
+	check(f4.is_empty(), "and silent")
+
+	print("[11] it caps rather than docks")
+	# The deduction would be a claim about how much worse the map is, and this
+	# says nothing about the map. A run already below the cap does not move.
+	var f5: Array[Dictionary] = []
+	check(calc._cap_for_a_trivial_encounter(perfect, scen, 80, f5) == 80,
+		"a score already below the cap is unchanged")
+
 	print("")
 	if failures == 0:
 		print("test_score_reads_the_measurements: PASS")

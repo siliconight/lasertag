@@ -6,6 +6,12 @@ class_name LT_ScoreCalculator
 ## Categories: Traversal 25, NPC Pathing 20, Sightlines 20, Cover 20,
 ## Combat Pacing 15.
 
+## One below the PASS band. A trivial encounter is held here rather than being
+## docked a number of points, because the deduction would be a claim about how
+## much worse the map is and this says nothing about the map -- only that the
+## run did not test it.
+const TRIVIAL_ENCOUNTER_CAP := 89
+
 const GRADE_BANDS := [
 	[90, "PASS"],
 	[75, "PASS_WITH_TUNING"],
@@ -43,6 +49,7 @@ func calculate(summary: Dictionary, scenario: LT_TestScenario,
 	var pacing := _score_pacing(summary, scenario, findings)
 
 	var total := clampi(traversal + pathing + sightlines + cover + pacing, 0, 100)
+	total = _cap_for_a_trivial_encounter(summary, scenario, total, findings)
 
 	return {
 		"overall_score": total,
@@ -363,6 +370,49 @@ func _score_pacing(summary: Dictionary, scenario: LT_TestScenario,
 			"Average player survival was %.1fs — players die before they can react." % survival))
 
 	return clampi(score, 0, 15)
+
+## A run that never threatened the crew cannot certify the map.
+##
+## `restaurant_row_001` seed 9003, crew 4, scored **100 PASS** against one
+## guard once roadmap 128 made the traversal category reachable. Every category
+## was read correctly; nothing anywhere asked whether the encounter had been a
+## contest. It scored 75 before only because a quarter of the rubric was
+## unreachable, which is not a safeguard -- it is a broken instrument
+## accidentally pointing the right way.
+##
+## THE TEST IS THRESHOLD-FREE: the crew lost NOBODY. Not "few deaths", not a
+## rate -- zero, across every run in the sweep. On this map that is 24 crew
+## lives at six runs and 100 at twenty-five, none of them spent. Measured, and
+## it does not fire on a map that fights back: `county_hospital_001` seed 9005
+## put 47 crew members down, `warehouse_yard_001` at crew 1 was wiped in every
+## run.
+##
+## IT CAPS THE GRADE RATHER THAN DOCKING POINTS, because docking would be a
+## claim about how much worse the map is and this is not a claim about the map
+## at all. The geometry may be excellent. What the run cannot support is the
+## sentence PASS means -- that the level was exercised and held up -- so the
+## score is held one band below it and the finding says why. A map that earns
+## PASS on a contested encounter still gets it.
+##
+## The zero-enemy case is excluded deliberately: a scenario with no guards has
+## no encounter to be trivial, and a walkthrough is a legitimate thing to
+## measure (it is how `route_completion_rate` was first proved to work at all).
+func _cap_for_a_trivial_encounter(summary: Dictionary, scenario: LT_TestScenario,
+		total: int, findings: Array[Dictionary]) -> int:
+	var enemies: int = scenario.enemy_count if scenario != null else 0
+	if enemies <= 0 or int(summary.get("runs", 0)) <= 0:
+		return total
+	if int(summary.get("player_deaths", 0)) > 0:
+		return total
+	var capped := mini(total, TRIVIAL_ENCOUNTER_CAP)
+	findings.append(_finding("FAIL", "TRIVIAL_ENCOUNTER",
+		("The crew did not lose a single member in %d run(s) against %d "
+		+ "enem%s. The map may be fine and this run cannot say so: nothing "
+		+ "here was tested under pressure, so the score is held below PASS "
+		+ "(%d, from %d).")
+		% [int(summary.get("runs", 0)), enemies,
+			"y" if enemies == 1 else "ies", capped, total]))
+	return capped
 
 func _count_findings(findings: Array[Dictionary], type_name: String) -> int:
 	var count := 0
