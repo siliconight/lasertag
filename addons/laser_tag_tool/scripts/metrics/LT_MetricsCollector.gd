@@ -185,6 +185,22 @@ func summary() -> Dictionary:
 		"enemy_deaths": _sum(runs, "enemy_deaths"),
 		"player_stuck_events": _sum(runs, "player_stuck_events"),
 		"enemy_stuck_events": _sum(runs, "enemy_stuck_events"),
+		# THE SAME NUMBERS WITH THEIR UNITS ON (roadmap 132). A raw count
+		# depends on how many runs the sweep did and how many bodies were in
+		# them, so it cannot be compared between maps or between sweeps -- and
+		# comparing them is the only way to tell a sticky corner from a map
+		# one side cannot cross. Measured across three cold runs:
+		#
+		#   county_hospital 9005/9106/9207   0.71 / 1.00 / 0.91 per enemy-run
+		#   warehouse_yard  9004/9105/9206   0.03 / 0.00 / 0.00
+		#   restaurant_row  9003/9104/9205   0.00 / 0.00 / 0.00
+		#
+		# Twenty-six times between the worst healthy map and the best sick
+		# one, with nothing in between.
+		"enemy_stuck_per_enemy_run": _per_body(runs, "enemy_stuck_events",
+			"enemy_count"),
+		"player_stuck_per_player_run": _per_body(runs, "player_stuck_events",
+			"player_count"),
 		"shots_fired": _sum(runs, "shots_fired"),
 		"shots_hit": _sum(runs, "shots_hit"),
 		"shots_missed": _sum(runs, "shots_missed"),
@@ -250,6 +266,27 @@ func _avg(runs: Array[Dictionary], key: String) -> float:
 			total += value
 			count += 1
 	return (total / float(count)) if count > 0 else -1.0
+
+func _per_body(runs: Array[Dictionary], field: String, count_field: String) -> float:
+	"""Events per body per run, so the figure means the same on two maps.
+
+	`enemy_stuck_events` is a sum over the sweep. Six enemies over 25 runs and
+	two over five produce numbers that cannot be put beside each other, and
+	the question this answers -- is the average guard jamming, or is one
+	corner sticky -- needs them to be. Runs that carried no bodies of that
+	kind are skipped rather than counted as zero.
+	"""
+	var total := 0.0
+	var bodies := 0
+	for run in runs:
+		var n: int = int(run.get(count_field, 0))
+		if n <= 0:
+			continue
+		total += float(run.get(field, 0))
+		bodies += n
+	if bodies == 0:
+		return 0.0
+	return snappedf(total / float(bodies), 0.001)
 
 func _progress(runs: Array[Dictionary]) -> float:
 	"""Mean fraction of the route reached, over runs that HAD a route.

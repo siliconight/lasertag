@@ -1,5 +1,59 @@
 # Changelog
 
+## [0.21.0] - a stuck count with its units on
+
+Roadmap 132. Cold run 9005 produced three candidates that completed the route
+in every run and stranded their guards: `enemy_stuck_events` 106, 150 and 137
+against ZERO on the previous cold run. Two of the three scored 80
+PASS_WITH_TUNING.
+
+### Added
+- `enemy_stuck_per_enemy_run` and `player_stuck_per_player_run` in the summary.
+  A raw count is a sum over a sweep, so it depends on how many runs were done
+  and how many bodies were in them: six enemies over 25 runs and two over five
+  produce figures that cannot be put beside each other. Putting them beside
+  each other is the only way to tell a sticky corner from a map one side
+  cannot cross.
+
+  ```
+  county_hospital 9005 / 9106 / 9207    0.71 / 1.00 / 0.91 per enemy-run
+  warehouse_yard  9004 / 9105 / 9206    0.03 / 0.00 / 0.00
+  restaurant_row  9003 / 9104 / 9205    0.00 / 0.00 / 0.00
+  ```
+
+- `ENEMY_PATHING_BROKEN`, a FAIL, above 0.5 per enemy per run. **The line is
+  measured rather than chosen**: the healthy maps sit at 0.00-0.03 and the sick
+  one at 0.71-1.00, twenty-six times apart with nothing in between, so any line
+  in that gap picks the same maps. Below it `ENEMY_STUCK` stays a WARN and now
+  prints the rate too.
+
+  One finding was reporting two different facts. A sticky corner and a map the
+  enemy side cannot cross both printed "Enemies got stuck N time(s)" at WARN,
+  and a severity that does not move with the magnitude trains its reader to
+  skip it.
+
+### What this deliberately does not do
+**The penalty is still capped at 10.** A map whose guards cannot move loses ten
+points of a hundred and can still pass — verified after the change: seed 9005
+scores 75 PASS_WITH_TUNING with `ENEMY_PATHING_BROKEN` against it. The finding
+says so now; whether the SCORE should is roadmap 128's open question and is not
+decided here.
+
+### Measured
+Re-run of `county_hospital_001` seed 9005 with the new addon, 5 runs:
+`enemy_stuck_per_enemy_run` **0.70**, `player_stuck_per_player_run` **0.00** —
+the same 0.70 the 25-run sweep reported, which is the normalisation working.
+The asymmetry is the finding: the crew crosses this map and the guards do not.
+
+### A duplicate that was nearly built
+The first plan for this item was an engagement metric and a `NO_ENGAGEMENT`
+finding. **Both already exist.** Seed 9106 -- 0 shots in 25 runs -- already
+reported `NO_ENGAGEMENT` ("No shots were ever fired") and `NO_CONTACT`, and
+scored 35 FAIL. Checking before building also killed the metric that plan
+rested on: enemies-that-acquired-a-target runs 0.19-0.63 on every map measured,
+healthy and sick alike, so it does not discriminate and a finding built on it
+would have fired everywhere.
+
 ## [0.20.1] - an aim point outside the body is a finding, not a blank report
 
 0.20.0 made `aim_height_m` settable. This is the guard that has to come with

@@ -129,11 +129,41 @@ func _score_pathing(summary: Dictionary, unreachable_spawns: int,
 			"%d enemy spawn point(s) could not reach the play space." % unreachable_spawns))
 
 	var stuck_per_run := float(enemy_stuck) / float(runs)
+	# PER ENEMY PER RUN, because a raw count says nothing across maps: six
+	# enemies over 25 runs and two over five are not comparable, and the
+	# question is whether the AVERAGE GUARD is jamming (roadmap 132).
+	var per_enemy: float = float(summary.get("enemy_stuck_per_enemy_run", 0.0))
 	if stuck_per_run > 0.25:
 		var penalty := mini(int(stuck_per_run * 8.0), 10)
 		score -= penalty
-		findings.append(_finding("WARN", "ENEMY_STUCK",
-			"Enemies got stuck %d time(s) across %d run(s)." % [enemy_stuck, runs]))
+		# ONE FINDING, TWO DIFFERENT FACTS, and they were being reported as the
+		# same one. A sticky corner and a map the enemy side cannot cross both
+		# printed "Enemies got stuck N time(s)" at WARN, and a severity that
+		# does not move with the magnitude trains its reader to skip it.
+		#
+		# The line is 0.5 -- a guard jamming every second run. It is measured,
+		# not chosen: across three cold runs the healthy maps sit at 0.00-0.03
+		# per enemy-run and the sick one at 0.71-1.00, twenty-six times apart
+		# with nothing in between, so any line in that gap picks the same
+		# maps. county_hospital_001 stranded its guards at 0.71, 0.91 and 1.00
+		# while two of its three candidates scored 80 PASS_WITH_TUNING.
+		#
+		# NOTE WHAT THIS DOES NOT DO. The penalty is still capped at 10, so a
+		# map whose guards cannot move loses 10 of 100 and can still pass. The
+		# finding now says so; whether the SCORE should say so is roadmap
+		# 128's open question and is not decided here.
+		if per_enemy >= 0.5:
+			findings.append(_finding("FAIL", "ENEMY_PATHING_BROKEN",
+				("Enemies got stuck %d time(s) across %d run(s) -- %.2f per "
+				+ "enemy per run, so the average guard jams in every second "
+				+ "run or worse. This is not a sticky corner: the map is not "
+				+ "traversable for the enemy side, and every combat number "
+				+ "below describes a fight the guards could not reach.")
+				% [enemy_stuck, runs, per_enemy]))
+		else:
+			findings.append(_finding("WARN", "ENEMY_STUCK",
+				("Enemies got stuck %d time(s) across %d run(s), %.2f per "
+				+ "enemy per run.") % [enemy_stuck, runs, per_enemy]))
 	elif enemy_stuck == 0:
 		findings.append(_finding("PASS", "ENEMY_PATHING",
 			"No enemy stuck events recorded."))
