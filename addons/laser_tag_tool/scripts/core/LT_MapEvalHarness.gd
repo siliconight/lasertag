@@ -309,6 +309,8 @@ func validate_map() -> bool:
 	validation_findings.clear()
 	var ok := true
 
+	_check_aim_point()
+
 	if player_spawns.is_empty():
 		_add_finding("FAIL", "MISSING_PLAYER_SPAWN", "No LT_PlayerSpawn node found.")
 		if scenario.fail_on_missing_player_spawn:
@@ -402,6 +404,43 @@ func _world_collision_present() -> bool:
 	var query := PhysicsRayQueryParameters3D.create(origin, origin + Vector3.DOWN * 50.0)
 	query.collision_mask = LT_Const.LAYER_WORLD
 	return not get_world_3d().direct_space_state.intersect_ray(query).is_empty()
+
+## The aim point has to be INSIDE the body it is aimed at (roadmap 131).
+##
+## `LT_LineOfSightTester` casts a ray at `target.global_position + UP *
+## aim_height` and grants LOS only when that ray hits the target body FIRST.
+## An aim point above the capsule misses it, so nothing ever sees anything --
+## every run reads as a map with no sightlines, which is a report full of
+## zeroes that looks like a level problem and is a configuration one.
+##
+## The safe band is the capsule's cylindrical section, `radius` to
+## `height - radius`: inside it the ray meets the body's full width, above it
+## the ray grazes a hemisphere, and at the apex it misses. This was unreachable
+## until 0.20.0 and could not go wrong; now that `aim_height_m` is settable it
+## can, so it is checked rather than assumed.
+##
+## WARN, not FAIL. The band is where the ray meets the full width, and a value
+## just outside it still hits a narrowing hemisphere -- a run is degraded there
+## rather than meaningless, and refusing to evaluate would be stricter than the
+## geometry warrants. Above the capsule entirely is a different matter and says
+## so.
+func _check_aim_point() -> void:
+	var aim: float = LT_LineOfSightTester.aim_height
+	var r: float = maxf(0.05, scenario.player_radius_m)
+	var h: float = maxf(2.0 * r, scenario.player_height_m)
+	if aim > h:
+		_add_finding("FAIL", "AIM_POINT_ABOVE_BODY",
+			("aim_height_m is %.2f m and the body is %.2f m tall, so every "
+			+ "line-of-sight ray is cast over the target and misses it. No "
+			+ "body will see any other body on any map.") % [aim, h])
+		return
+	if aim < r or aim > h - r:
+		_add_finding("WARN", "AIM_POINT_OFF_TORSO",
+			("aim_height_m is %.2f m, outside the %.2f-%.2f m cylindrical "
+			+ "section of a %.2f m body at radius %.2f. Sight rays graze the "
+			+ "capsule's cap rather than meeting its full width, so line of "
+			+ "sight reads narrower than the body is.")
+			% [aim, r, h - r, h, r])
 
 func _add_finding(severity: String, type_name: String, message: String) -> void:
 	validation_findings.append({"severity": severity, "type": type_name, "message": message})

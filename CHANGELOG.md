@@ -1,5 +1,32 @@
 # Changelog
 
+## [0.20.1] - an aim point outside the body is a finding, not a blank report
+
+0.20.0 made `aim_height_m` settable. This is the guard that has to come with
+it: the value was a const and could not go wrong, and now it can.
+
+### Added
+- `_check_aim_point()` in `validate_map`. `LT_LineOfSightTester` casts a ray at
+  `target.global_position + UP * aim_height` and grants LOS only when that ray
+  hits the target body FIRST, so an aim point above the capsule goes over the
+  target and nothing on the map ever sees anything -- a report full of zeroes
+  that looks like a level problem and is a configuration one.
+
+  `AIM_POINT_ABOVE_BODY` is a FAIL: no body can see any other, on any map.
+  `AIM_POINT_OFF_TORSO` is a WARN -- outside the cylindrical section the ray
+  still meets a narrowing hemisphere, so the run is degraded rather than
+  meaningless and refusing to evaluate would be stricter than the geometry
+  warrants.
+
+- `test_one_eye_per_body` [7] exercises the REAL ray rather than the
+  arithmetic: a 1.0 m aim point on a 1.8 m body is seen, a 2.6 m one is not.
+  A test that repeated the harness's own comparison would prove nothing.
+
+### Measured
+Re-ran `warehouse_yard_001` seed 9105, 25 runs, against the 0.20.0 report:
+score, wipes, timeouts, progress, completion, both stuck counts, shots, contact
+and survival IDENTICAL. The aim height did not move -- only its provenance did.
+
 ## [0.20.0] - one eye per body
 
 Roadmap 131. Seven heights described one firefight and no two of them agreed:

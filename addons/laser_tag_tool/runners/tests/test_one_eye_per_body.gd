@@ -138,6 +138,44 @@ func _init() -> void:
 	check(crossing > 1.2222,
 		"and it is ABOVE the 1.2222 the mismatched heights produced")
 
+	print("[7] the aim point has to be inside the body it is aimed at")
+	# `has_line_of_sight` casts AT this height and grants LOS only when the ray
+	# hits the target body first, so an aim point above the capsule misses and
+	# nothing on the map ever sees anything. Exercised against the real ray
+	# rather than against the arithmetic, because the arithmetic is what the
+	# harness check does and a test that repeats it proves nothing.
+	var target: CharacterBody3D = load(
+		"res://addons/laser_tag_tool/scenes/LT_EnemyPill.tscn").instantiate()
+	root.add_child(target)
+	# A PHYSICS frame, not a process one: the ray is a space-state query and
+	# the collider is not in the space until physics has run. And well away
+	# from the two bodies parked at the origin by [3] -- `exclude_body` is
+	# null here, so a ray starting inside one of those hits it first and the
+	# `collider == target` test fails for the wrong reason.
+	await physics_frame
+	target.global_position = Vector3(40.0, 0.0, 0.0)
+	await physics_frame
+	var from := Vector3(40.0, 1.6, -8.0)
+
+	LT_LineOfSightTester.aim_height = 1.0
+	check(LT_LineOfSightTester.has_line_of_sight(
+		from, target, target.get_world_3d(), null),
+		"a 1.0 m aim point on a 1.8 m body is seen")
+
+	LT_LineOfSightTester.aim_height = 2.6
+	check(not LT_LineOfSightTester.has_line_of_sight(
+		from, target, target.get_world_3d(), null),
+		"an aim point above the capsule is not -- the ray goes over the body")
+	LT_LineOfSightTester.aim_height = 1.0
+
+	# And the contract's own value sits in the shipped body's safe band.
+	var scen := LT_TestScenario.new()
+	var r: float = scen.player_radius_m
+	var h: float = scen.player_height_m
+	check(r <= scen.aim_height_m and scen.aim_height_m <= h - r,
+		"the shipped aim height is inside the shipped body's torso (%.2f in %.2f-%.2f)"
+			% [scen.aim_height_m, r, h - r])
+
 	print("")
 	if failures == 0:
 		print("test_one_eye_per_body: PASS")
