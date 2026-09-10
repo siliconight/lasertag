@@ -188,6 +188,13 @@ func _tint_pill(pill: Node, color: Color) -> void:
 		mesh.set_surface_override_material(0, material)
 
 func _build_children() -> void:
+	# THE AIM HEIGHT, SET ONCE FOR THE RUN (roadmap 131). It was a const both
+	# sides read and no scenario could move, which left half the sightline
+	# geometry unreachable: how tall a solid must be to break a MUTUAL line
+	# is decided by the two eyes AND this. A consumer whose characters are
+	# not 1.8 m tall was aiming at ours.
+	LT_LineOfSightTester.aim_height = maxf(0.05, scenario.aim_height_m)
+
 	registry = LT_PlayerRegistry.new()
 	registry.name = "LT_PlayerRegistry"
 	add_child(registry)
@@ -456,9 +463,24 @@ func _apply_body(pill: Node) -> void:
 		mesh_node.mesh = cm
 		mesh_node.position.y = hgt * 0.5
 
+	# THE EYE, AND THE BARREL AT THE SAME HEIGHT (roadmap 131). The camera
+	# has followed the contract since 0.11.0; the muzzle rode under it at
+	# camera - 0.05 and 0.3 m forward, and `_find_visible_enemy` sighted from
+	# a hardcoded 1.4 that followed nothing. So a body decided what it could
+	# see from 0.15 m below its own barrel, and the forward offset could put
+	# that barrel through a wall the body was standing behind.
+	#
+	# The forward offset was never load-bearing: `LT_Shooter.fire` already
+	# excludes `owner_body` from its query, so a muzzle at the eye cannot hit
+	# the shooter. Zeroing it makes the firing ray the SAME ray the
+	# visibility test just proved clear.
+	var eye_y: float = clampf(scenario.player_eye_height_m, 0.1, hgt)
 	var cam: Camera3D = pill.get_node_or_null("Camera3D")
 	if cam != null:
-		cam.position.y = clampf(scenario.player_eye_height_m, 0.1, hgt)
+		cam.position.y = eye_y
+		var muzzle: Marker3D = cam.get_node_or_null("Marker3D_Muzzle")
+		if muzzle != null:
+			muzzle.position = Vector3.ZERO
 
 	var bot_c: LT_BotPlayerController = pill.get_node_or_null(
 		"LT_BotPlayerController")
@@ -567,6 +589,24 @@ func _configure_enemy(pill: Node) -> void:
 
 	var movement: LT_EnemyMovement = pill.get_node("LT_EnemyMovement")
 	movement.use_navigation = navigation_available
+
+	# THE ENEMY'S EYE AND BARREL, from the scenario rather than the .tscn
+	# (roadmap 131). The pill authored 1.5 for the eye and 1.3 for the
+	# muzzle and neither was reachable from a scenario, so an enemy shot
+	# from 0.2 m below what it had just proved it could see -- into the
+	# cover it was looking over. `LT_PlayerRegistry` then sighted the same
+	# body from 1.4 again while choosing which crew member to shoot.
+	#
+	# `agent_contract.json` says npc_standard shares the player's metrics
+	# until a distinct class ships, which is why one field covers both here
+	# and the default equals the crew's eye.
+	var eye_y: float = maxf(0.1, scenario.enemy_eye_height_m)
+	var eye_node: Marker3D = pill.get_node_or_null("Marker3D_Eye")
+	if eye_node != null:
+		eye_node.position.y = eye_y
+	var enemy_muzzle: Marker3D = pill.get_node_or_null("Marker3D_Muzzle")
+	if enemy_muzzle != null:
+		enemy_muzzle.position = Vector3(0.0, eye_y, 0.0)
 
 ## ---- Run lifecycle ----
 
@@ -701,6 +741,11 @@ func run_evaluation(eval_scenario: LT_TestScenario) -> Dictionary:
 	if scenario.enable_map_sampling:
 		map_sampler.sample_spacing = scenario.sample_spacing
 		map_sampler.overexposed_threshold = scenario.overexposed_threshold
+		# THE SAME EYE THE CREW PLAYS FROM. This module carried its own
+		# `const EYE_HEIGHT := 1.5` -- a cover measurement taken 0.2 m below
+		# the body that walks the level is a measurement of a different
+		# level (roadmap 131).
+		map_sampler.eye_height = scenario.player_eye_height_m
 		# DERIVED, NOT CHOSEN: a sightline is only "open" if something can
 		# shoot down it, so the reach comes from the enemy's laser range.
 		map_sampler.sightline_limit_m = scenario.enemy_laser_range

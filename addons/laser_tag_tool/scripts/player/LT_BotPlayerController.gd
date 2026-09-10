@@ -142,7 +142,7 @@ func _physics_process(delta: float) -> void:
 func _fire_at(enemy: Node3D) -> void:
 	if shooter == null or shooter.muzzle == null:
 		return
-	var aim_point := enemy.global_position + LT_LineOfSightTester.CHEST_OFFSET
+	var aim_point := enemy.global_position + LT_LineOfSightTester.chest_offset()
 	var direction := (aim_point - shooter.muzzle.global_position).normalized()
 	direction = _apply_aim_error(direction)
 
@@ -164,7 +164,12 @@ func _apply_aim_error(direction: Vector3) -> Vector3:
 	return direction.normalized()
 
 func _find_visible_enemy() -> Node3D:
-	var eye := body.global_position + Vector3.UP * 1.4
+	# THE BODY'S OWN EYE, not a number in this file. It was a hardcoded
+	# `Vector3.UP * 1.4` -- the one point on this body `player_eye_height_m`
+	# never reached, so the harness moved the camera to 1.6 and the muzzle
+	# rode under it at 1.55 while the probe stayed at 1.4. The bot could
+	# decline a shot its own barrel had (roadmap 131).
+	var eye := LT_LineOfSightTester.eye_position(body)
 	var best: Node3D = null
 	var best_distance := INF
 	for enemy in get_tree().get_nodes_in_group(LT_Const.GROUP_ENEMY):

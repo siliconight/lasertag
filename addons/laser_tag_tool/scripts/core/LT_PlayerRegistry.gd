@@ -64,7 +64,11 @@ func get_best_target_for_enemy(enemy: Node3D) -> Node3D:
 			score += 30.0
 
 		var world := enemy.get_world_3d() if enemy is Node3D else null
-		var eye := enemy.global_position + Vector3.UP * 1.4
+		# The enemy's own eye. This said 1.4 while the same enemy's brain
+		# sighted from its 1.5 m marker, so target SELECTION and target
+		# ENGAGEMENT disagreed about what the enemy could see. Live only
+		# since crews grew past one member (roadmap 129/131).
+		var eye := LT_LineOfSightTester.eye_position(enemy)
 		var body := enemy as CollisionObject3D
 		if LT_LineOfSightTester.has_line_of_sight(eye, player, world, body):
 			score += 50.0

@@ -104,7 +104,7 @@ func _try_fire_at_target(target_node: Node3D) -> void:
 	if fire_timer > 0.0 or shooter == null or shooter.muzzle == null:
 		return
 
-	var aim_point := target_node.global_position + LT_LineOfSightTester.CHEST_OFFSET
+	var aim_point := target_node.global_position + LT_LineOfSightTester.chest_offset()
 	var direction := (aim_point - shooter.muzzle.global_position).normalized()
 	var shot := shooter.fire(direction)
 
@@ -122,10 +122,16 @@ func _find_target() -> Node3D:
 	return registry.get_best_target_for_enemy(_body)
 
 func _has_line_of_sight(target_node: Node3D) -> bool:
-	if eye == null or _body == null:
+	if _body == null:
 		return false
+	# Resolved from the BODY rather than read off the export, so this agrees
+	# with `LT_PlayerRegistry.get_best_target_for_enemy` by construction --
+	# the two used to sight this enemy from 1.5 and 1.4 respectively, so it
+	# could pick a target it then could not see (roadmap 131). It also
+	# survives the null-export case `_ready` already guards against.
+	var from := LT_LineOfSightTester.eye_position(_body)
 	return LT_LineOfSightTester.has_line_of_sight(
-		eye.global_position, target_node, eye.get_world_3d(), _body,
+		from, target_node, _body.get_world_3d(), _body,
 		shooter.hit_mask if shooter != null else LT_Const.LASER_HIT_MASK)
 
 func _back_away() -> void:

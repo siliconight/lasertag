@@ -38,6 +38,27 @@ class_name LT_TestScenario
 @export var player_eye_height_m: float = 1.6
 @export var player_walk_speed_mps: float = 4.0
 
+## THE ENEMY'S EYE, AND THE CHEST BOTH SIDES AIM AT. Roadmap 131.
+##
+## FIVE heights used to describe one firefight and no two of them agreed:
+## the crew decided what it could SEE from a hardcoded 1.4 while its camera
+## sat at `player_eye_height_m` (1.6) and its muzzle -- a child of that
+## camera -- fired from 1.55, so the bot could decline a shot its own barrel
+## had. The enemy sighted from a 1.5 m marker and fired from a 1.3 m one,
+## neither reachable from here. `LT_MapSampler` measured the map's cover
+## from a third number, its own `const EYE_HEIGHT := 1.5`.
+##
+## `agent_contract.json` says npc_standard shares the player's metrics until
+## a distinct class ships, so the default here is the player's eye rather
+## than the 1.5 the pill happened to carry.
+@export var enemy_eye_height_m: float = 1.6
+## Where a shot is aimed on the target: `LT_LineOfSightTester.CHEST_OFFSET`,
+## which was a const both sides read and nothing could set. It is half the
+## sightline geometry -- the height a solid must reach to break a MUTUAL
+## line is `a - (a - c)^2 / (a + b - 2c)` in the two eyes and this -- so a
+## consumer changing a body has to be able to move it.
+@export var aim_height_m: float = 1.0
+
 @export_group("Combat Tuning")
 @export var player_laser_range: float = 60.0
 @export var enemy_laser_range: float = 35.0

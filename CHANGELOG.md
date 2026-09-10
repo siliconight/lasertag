@@ -1,5 +1,103 @@
 # Changelog
 
+## [0.20.0] - one eye per body
+
+Roadmap 131. Seven heights described one firefight and no two of them agreed:
+
+```
+crew   sees from   1.40   hardcoded in LT_BotPlayerController
+crew   camera      1.60   scenario.player_eye_height_m, since 0.11.0
+crew   shoots from 1.55   Marker3D_Muzzle, a child of that camera, 0.3 m fwd
+enemy  sees from   1.50   LT_EnemyPill.tscn Marker3D_Eye
+enemy  shoots from 1.30   LT_EnemyPill.tscn Marker3D_Muzzle, 0.4 m fwd
+enemy  targeted at 1.40   LT_PlayerRegistry.get_best_target_for_enemy
+map    sampled at  1.50   LT_MapSampler's own const EYE_HEIGHT
+```
+
+Two of those are defects standing alone. **A body that sights 0.15 m below its
+own barrel can decline a shot it has** -- and take one it does not. An enemy
+that sights 0.2 m *above* its barrel fires into the cover it is looking over.
+The forward offsets make it worse in the direction that matters: a muzzle
+0.4 m in front of the eye can be through the wall the body is standing behind.
+
+The registry's 1.4 only went live when crews grew past one member (roadmap
+129): `get_best_target_for_enemy` returns early at `alive.size() == 1`. So
+target SELECTION and target ENGAGEMENT have disagreed on every multi-member
+run this project has done, which is all of them since 2026-09-09.
+
+`LT_MapSampler`'s is the quietest and the worst, because it is the number that
+decides what the report says about the MAP rather than about one run. Cover
+was being measured 0.1 m below the eye that plays the level.
+
+### Changed
+- A body's eye is a NODE, positioned once by the harness, and
+  `LT_LineOfSightTester.eye_position(body)` is the only way to ask where it
+  is. A number cannot drift from itself. All three sight call sites read it.
+- The muzzle sits AT the eye for both sides, with no forward offset, so the
+  firing ray is the same ray the visibility test just proved clear. The
+  offset was never load-bearing: `LT_Shooter.fire` already excludes
+  `owner_body` from its query, so a muzzle at the eye cannot hit the shooter.
+- `LT_MapSampler.EYE_HEIGHT` becomes an `@export`, assigned from
+  `player_eye_height_m` -- the same field that places the crew camera.
+
+### Added
+- `enemy_eye_height_m` and `aim_height_m` on `LT_TestScenario`. Three of the
+  seven heights were unreachable from a scenario, and how tall a solid must be
+  to break a MUTUAL sightline is decided by the two eyes and the aim height
+  together: `h = a - (a - c)^2 / (a + b - 2c)`. A consumer stating a body
+  could reach one third of that geometry. The default enemy eye is the
+  player's, because `agent_contract.json` says npc_standard shares the
+  player's metrics until a distinct class ships -- not the 1.5 the pill
+  happened to carry.
+- `LT_LineOfSightTester.aim_height`, a static var the harness sets once from
+  the scenario. `CHEST_OFFSET` stays as the ratified default and the fallback.
+- `runners/tests/test_one_eye_per_body.gd`. It guards the literals as well as
+  the behaviour, because the defect WAS six literals and no run-level
+  assertion catches a reintroduced one on a map with no geometry in the band
+  that moved -- which, as below, is most maps.
+
+### Measured
+warehouse_yard_001, crew 4, 25 runs, three maps, the addon the only difference.
+
+**The firefight is indifferent on this map.** `route_progress_rate`,
+`route_completion_rate`, `team_wipe_count` and `avg_enemy_deaths_per_run` are
+identical on all three seeds. The whole run-level residue is stuck counts, and
+they move in both directions (+4 player on 9004, -3 on 9105); seed 9004 crosses
+WARN -> FAIL on a two-point score move, which is a band boundary rather than a
+finding.
+
+That is expected rather than reassuring: the shipped corpus has no geometry
+between 1.10 m and 1.20 m (roadmap 130), so raising an eye from 1.4 to 1.6
+crosses nothing on it. A three-run smoke returned figures identical to four
+significant figures on both arms, which looked like a wiring failure and was
+not -- a probe printing the live positions showed eye 2.600 and muzzle 2.600
+against a body at 1.000. That is why `test_one_eye_per_body` guards the
+LITERALS as well as the behaviour.
+
+**The map-level figures are where it lands, and they move the same way on every
+seed** -- these come from the sampler, whose eye rose 1.5 -> 1.6:
+
+```
+                          seed 9004         seed 9105         seed 9206
+avg_exposure          1.5664 -> 1.5858  1.4352 -> 1.4592  1.6308 -> 1.6552
+avg_open_directions   3.8555 -> 3.8619  3.9405 -> 3.9657  3.7769 -> 3.7929
+peer_exposed_fraction 0.7300 -> 0.7342  0.7662 -> 0.7742  0.7639 -> 0.7704
+overexposed_fraction  0.2662 -> 0.2677  0.2883 -> 0.2941  0.2586 -> 0.2624
+blind_fraction        0.6526 -> 0.6526  0.5496 -> 0.5492  0.4245 -> 0.4150
+```
+
+Nine of ten move, all in the same direction, on three different maps: every map
+reads as more open and more exposed than it was being reported. Not noise the
+way the stuck counts are -- a systematic correction the size of the 10 cm the
+sampler was measuring below the eye that plays the level.
+
+### What this does to the derived cover height
+With every side sighting from 1.6 at a 1.0 chest, the crossing rises from
+1.2222 m to **1.3000 m**. `deli_counter/agent_contract.json`'s `sightlines`
+block is re-derived to match. It flags the same 39 of 91 combat rooms in the
+shipped presets, because that corpus has nothing between 1.20 m and 1.40 m --
+the same clustering roadmap 130 measured.
+
 ## [0.19.0] - how far the crew got, not merely whether it finished
 
 Roadmap 128. `route_completion_rate` is a boolean averaged, so it reports 0.0

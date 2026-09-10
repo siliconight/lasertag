@@ -24,7 +24,20 @@ class_name LT_MapSampler
 ## a wide-open arena scoring as perfectly covered. A reader that cannot find
 ## the field it wants has to know it is missing.
 
-const EYE_HEIGHT := 1.5
+## The ratified crew eye, and the fallback when the harness sets nothing.
+const EYE_HEIGHT := 1.6
+
+## The height every ray in this module is cast from. Roadmap 131.
+##
+## Was `const EYE_HEIGHT := 1.5` -- a SEVENTH spelling of "where does a body
+## see from" in a tool that had six others, and the one that decides what
+## this module reports about the MAP rather than about a run. A cover
+## measurement taken 0.2 m below the eye that plays the level is a
+## measurement of a different level.
+##
+## `LT_MapEvalHarness` assigns it from `scenario.player_eye_height_m`, the
+## same field that positions the crew camera.
+@export var eye_height: float = EYE_HEIGHT
 const WORLD_MASK := LT_Const.LAYER_WORLD | LT_Const.LAYER_LASER_BLOCKER
 const RAY_DIRECTIONS := 8
 
@@ -66,7 +79,7 @@ func sample_map(world: World3D, navigation_available: bool,
 	var space := world.direct_space_state
 	var enemy_eyes: Array[Vector3] = []
 	for spawn_position in enemy_spawn_positions:
-		enemy_eyes.append(spawn_position + Vector3.UP * EYE_HEIGHT)
+		enemy_eyes.append(spawn_position + Vector3.UP * eye_height)
 
 	var blind_count := 0
 	var overexposed: Array[Dictionary] = []
@@ -84,7 +97,7 @@ func sample_map(world: World3D, navigation_available: bool,
 	var peer_ratio_total := 0.0
 
 	for sample in samples:
-		var eye: Vector3 = sample + Vector3.UP * EYE_HEIGHT
+		var eye: Vector3 = sample + Vector3.UP * eye_height
 		var visible := 0
 		for enemy_eye in enemy_eyes:
 			if _ray_clear(space, eye, enemy_eye):
@@ -291,6 +304,6 @@ func _viewpoints(samples: Array[Vector3]) -> Array[Vector3]:
 	var step: int = maxi(1, int(ceil(float(samples.size()) / float(max_viewpoints))))
 	var i := 0
 	while i < samples.size():
-		out.append(samples[i] + Vector3.UP * EYE_HEIGHT)
+		out.append(samples[i] + Vector3.UP * eye_height)
 		i += step
 	return out
