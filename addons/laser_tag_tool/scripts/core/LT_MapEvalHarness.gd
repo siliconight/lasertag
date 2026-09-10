@@ -696,10 +696,21 @@ func run_evaluation(eval_scenario: LT_TestScenario) -> Dictionary:
 		# player spawns + enemy spawns + route points, so the sampled region
 		# was the bounding box of somebody's gameplay placement plus 4 m, and
 		# any part of the level outside that box was never looked at.
+		# GEOMETRY ALONE WHEN THERE IS ANY, and the markers only as a
+		# fallback. 0.12.0 said "bounds from the geometry, not from the
+		# markers" and then appended the markers anyway, so they could still
+		# EXTEND the region past the level -- enemy spawns 59 to 75 m out did
+		# exactly that. The cost was a denominator that moved when nothing
+		# about the level did: Lot 0.53.0 changed only where enemies stand on
+		# restaurant_row_001 seed 9003, and `total_samples` went 3876 -> 2904
+		# on byte-identical geometry, dragging every cover figure with it
+		# (has_cover 0.764 -> 0.729, fully_open 0.211 -> 0.269). A measure of
+		# the level has to be measured over the level.
 		var anchors := _geometry_anchors()
-		anchors.append_array(_points_to_positions(player_spawns))
-		anchors.append_array(_points_to_positions(enemy_spawns))
-		anchors.append_array(_points_to_positions(route_points))
+		if anchors.is_empty():
+			anchors.append_array(_points_to_positions(player_spawns))
+			anchors.append_array(_points_to_positions(enemy_spawns))
+			anchors.append_array(_points_to_positions(route_points))
 		if not anchors.is_empty():
 			sightline_data = map_sampler.sample_map(
 				get_world_3d(), navigation_available,

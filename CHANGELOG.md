@@ -1,5 +1,47 @@
 # Changelog
 
+## [0.16.0] - the sampled region is the level, not the marker spread
+
+### Fixed
+- The sample bounds are the level's geometry ALONE when there is any; the
+  markers are a fallback for a scene with no meshes. 0.12.0 replaced a
+  marker-derived region with a geometry-derived one, said so in the comment,
+  and then appended the markers anyway -- so they could still EXTEND it.
+
+  IT IS REACHABLE BECAUSE THE TWO HALVES READ DIFFERENT THINGS.
+  `_collect_samples` finds a floor by raycasting COLLISION;
+  `_geometry_anchors` bounds the grid by MESHES. Wherever collision runs past
+  the visual geometry there is samplable ground outside the level's own box,
+  and a marker out there dragged the region onto it.
+
+  MEASURED WHEN LOT 0.53.0 MOVED ONLY WHERE ENEMIES STAND on
+  restaurant_row_001 seed 9003 -- byte-identical buildings:
+
+        total_samples          3876 -> 2904
+        has_cover_fraction    0.764 -> 0.729
+        fully_open_fraction   0.211 -> 0.269
+
+  A denominator that moves when the level does not makes every figure over it
+  a statement about somebody's marker placement. With geometry-only bounds
+  both placements sample 2904 and agree to three decimals; what is left is
+  real, and attributable -- Lot placed 6 cover nodes in the new arrangement
+  against 5 in the old.
+
+### Retracted
+- LOT 0.53.0's CHANGELOG AND ROADMAP 127 BOTH CLAIM THAT CHANGE CAUSED A NEW
+  `BLIND_MAP` WARNING AT 52%, AND IT DID NOT. That reading compared a 2904-
+  sample region against a 3876-sample one. Re-measured over the same
+  geometry-only region, `blind_fraction` is 0.5272 for the OLD placement and
+  0.5210 for the new -- above the 0.5 threshold either way, and slightly
+  BETTER after. The warning is a property of the site that the inflated region
+  had been hiding, because the extra ground it sampled lay near the distant
+  enemy spawns and was visible to them. There was no trade.
+
+### Added
+- `runners/tests/test_sample_bounds_are_the_level.gd` -- a slab whose collision
+  is wider than its mesh, so the defect is reproducible: 169 samples on
+  geometry bounds, 900 when a marker 90 m out is passed alongside them.
+
 ## [0.15.0] - wait for navigation to be ready, not for three frames
 
 ### Changed
