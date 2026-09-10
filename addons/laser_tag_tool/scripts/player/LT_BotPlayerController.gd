@@ -317,5 +317,38 @@ func _align_agent_to_mesh() -> void:
 	if nav_agent == null:
 		return
 	var map: RID = nav_agent.get_navigation_map()
-	if map.is_valid():
-		nav_agent.path_height_offset = NavigationServer3D.map_get_cell_height(map)
+	if not map.is_valid():
+		return
+	var cell_height: float = NavigationServer3D.map_get_cell_height(map)
+	nav_agent.path_height_offset = cell_height
+
+	# AND THE ARRIVAL RADIUS, DERIVED FROM THE BODY RATHER THAN AUTHORED.
+	# `path_desired_distance` was 0.8 in both pill scenes: a number with no
+	# stated origin, in the scene files the size contract exists to stop being
+	# the source of truth (roadmap 123). It decides when a waypoint counts as
+	# reached, so it is a property of the body and the bake, and both are
+	# readable here.
+	#
+	# Three terms, and Godot measures the distance in 3D so they combine that
+	# way:
+	#
+	#   radius        a waypoint inside the body's own footprint IS reached;
+	#                 `nav_agent.radius` is set from the contract at spawn.
+	#   per frame     the ground covered in one physics tick. Below this the
+	#                 body can step OVER the threshold between two samples and
+	#                 never register arrival -- which is the shape of the
+	#                 stall in item 122, arrived at from the other side.
+	#   half a cell   what `path_height_offset` above cannot remove. It
+	#                 subtracts exactly one cell height; slope and rounding
+	#                 leave up to half of one behind.
+	#
+	# On the shipped contract -- radius 0.35, speed 4.0, 60 Hz, cell 0.25 --
+	# that is 0.44, against the 0.8 it replaces. A SMALLER number is the
+	# direction that stalls, so this is measured rather than reasoned: see the
+	# A/B in Laser Tag's changelog for the run either side.
+	var ticks: float = maxf(1.0, float(Engine.physics_ticks_per_second))
+	var per_frame: float = move_speed / ticks
+	var horizontal: float = maxf(0.05, nav_agent.radius) + per_frame
+	var vertical: float = cell_height * 0.5
+	nav_agent.path_desired_distance = sqrt(
+		horizontal * horizontal + vertical * vertical)

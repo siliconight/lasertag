@@ -1,5 +1,50 @@
 # Changelog
 
+## [0.18.0] - the arrival radius is a property of the body, not of a scene file
+
+Roadmap 123's last arm.
+
+### Fixed
+- `path_desired_distance` is derived in `_align_agent_to_mesh` from the body
+  and the bake, beside the `path_height_offset` that item 122 already derived
+  there. It was 0.8 in both pill scenes -- a number with no stated origin, in
+  the scene files the size contract exists to stop being the source of truth.
+
+        radius        a waypoint inside the body's own footprint IS reached
+                      (`nav_agent.radius`, set from the contract at spawn)
+        per frame     move_speed / physics_ticks_per_second; below this the
+                      body steps OVER the threshold between two samples
+        half a cell   what path_height_offset cannot remove -- it subtracts
+                      exactly one cell height, slope and rounding leave up to
+                      half of one
+
+  Combined in 3D, because that is how Godot measures the distance. On the
+  shipped contract -- radius 0.35, speed 4.0, 60 Hz, cell 0.25 -- that is
+  0.435.
+
+### Measured, and it is not a tidying change
+  `restaurant_row_001` seed 9003, no enemies, 180 s, four runs either side,
+  the constant the only difference:
+
+        0.8 authored     route_completion 0.0 x4     player_stuck 38 x4
+        0.435 derived    route_completion 1.0 x4     player_stuck  0 x4
+
+  Three further seeds on the derived value completed 1.0 with 0 stuck. At 0.8
+  the agent counts a waypoint reached from 0.8 m away, cuts the corner and
+  jams. That is the OPPOSITE failure to item 122, where the distance was too
+  small to register arrival at all -- and 0.8 had worked on `market_row_001`,
+  which is exactly what a constant that survives one map looks like.
+
+  Under fire the two are indistinguishable, checked rather than assumed: 20
+  runs at 4 enemies gave 0 stuck events and within 3% on survival and shots
+  either way. The crew dies before path-following precision matters, which is
+  why the traversal case is the one that shows it.
+
+### Note
+- The 0.8 in `LT_PlayerPill.tscn` and `LT_EnemyPill.tscn` is left as the
+  authored fallback for a pill spawned without the controller's derivation.
+  Nothing in this repo's own evaluation path uses it any more.
+
 ## [0.17.0] - the navigation wait is a clock, and ZERO is not a coordinate
 
 Roadmap 126: `validate_map` reported NAVIGATION_MISSING on about 7% of
