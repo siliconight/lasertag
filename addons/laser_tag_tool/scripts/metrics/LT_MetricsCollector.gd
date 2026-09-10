@@ -40,6 +40,12 @@ func begin_run(run_id: int, player_count: int, enemy_count: int) -> void:
 		"engagement_distance_samples": 0,
 		"player_survival_time": -1.0,
 		"route_completed": false,
+		# HOW FAR the crew got, not merely whether it finished. A run that ends
+		# on ENEMIES_CLEARED at waypoint 1 of 3 traversed a third of the route,
+		# and `route_completed` records that as the same zero it gives a crew
+		# wiped on the spawn (roadmap 128).
+		"route_points_reached": 0,
+		"route_points_total": 0,
 		"team_wipe": false,
 		"end_reason": "NONE",
 		"duration_seconds": 0.0,
@@ -116,6 +122,13 @@ func record_event(event_name: String, metadata: Dictionary = {}) -> void:
 			current["enemy_stuck_events"] += 1
 		"ObjectiveReached":
 			current["route_completed"] = true
+		"RouteProgress":
+			# A high-water mark. The bot can be sent back down its route by
+			# cover-seeking, and "how far did it get" is the furthest it got.
+			var reached: int = int(metadata.get("reached", 0))
+			if reached > int(current["route_points_reached"]):
+				current["route_points_reached"] = reached
+			current["route_points_total"] = int(metadata.get("total", 0))
 		"TeamWipe":
 			current["team_wipe"] = true
 	_log_event(event_name, null, Vector3.ZERO, metadata)
@@ -166,6 +179,7 @@ func summary() -> Dictionary:
 		"avg_time_to_first_enemy_shot": _avg(runs, "time_to_first_enemy_shot"),
 		"avg_time_to_first_player_shot": _avg(runs, "time_to_first_player_shot"),
 		"route_completion_rate": _rate(runs, "route_completed"),
+		"route_progress_rate": _progress(runs),
 		"team_wipe_count": _count_true(runs, "team_wipe"),
 		"player_deaths": _sum(runs, "player_deaths"),
 		"enemy_deaths": _sum(runs, "enemy_deaths"),
@@ -236,6 +250,31 @@ func _avg(runs: Array[Dictionary], key: String) -> float:
 			total += value
 			count += 1
 	return (total / float(count)) if count > 0 else -1.0
+
+func _progress(runs: Array[Dictionary]) -> float:
+	"""Mean fraction of the route reached, over runs that HAD a route.
+
+	`route_completion_rate` beside this is a boolean averaged, so it reports 0.0
+	whether the crew was wiped on the spawn or cleared the map standing at
+	waypoint 2 of 3. Measured on restaurant_row_001 seed 9003 (roadmap 128),
+	six runs at one enemy: four ended ENEMIES_CLEARED with the crew alive and
+	the route unfinished, and completion called all six identical to a total
+	wipe.
+
+	Runs with no route at all are skipped rather than counted as zero -- a map
+	that defines no route has not failed to walk one.
+	"""
+	var total := 0.0
+	var counted := 0
+	for run in runs:
+		var points: int = int(run.get("route_points_total", 0))
+		if points <= 0:
+			continue
+		var reached: int = int(run.get("route_points_reached", 0))
+		total += clampf(float(reached) / float(points), 0.0, 1.0)
+		counted += 1
+	return (total / float(counted)) if counted > 0 else 0.0
+
 
 func _sum(runs: Array[Dictionary], key: String) -> int:
 	var total := 0

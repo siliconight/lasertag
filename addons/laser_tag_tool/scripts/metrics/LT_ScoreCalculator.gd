@@ -95,8 +95,18 @@ func _score_traversal(summary: Dictionary, findings: Array[Dictionary]) -> int:
 			"Bot completed the route in only %d%% of runs." % int(completion_rate * 100)))
 	else:
 		score = 0
-		findings.append(_finding("FAIL", "TRAVERSAL",
-			"Bot rarely completed the route (%d%% of runs)." % int(completion_rate * 100)))
+		# SAY HOW FAR IT GOT, because the boolean cannot (roadmap 128). A run
+		# that ends on ENEMIES_CLEARED at waypoint 2 of 3 is recorded here as
+		# the same zero as a crew wiped on the spawn, and the difference is the
+		# whole reading. The SCORE is unchanged -- this only stops the sentence
+		# beside it from being uninterpretable.
+		var progress: float = summary.get("route_progress_rate", -1.0)
+		var msg: String = ("Bot rarely completed the route (%d%% of runs)."
+			% int(completion_rate * 100))
+		if progress >= 0.0:
+			msg += (" It reached %d%% of the route's points on average, so the"
+				+ " zero above is how often it FINISHED, not how far it got.") 				% int(progress * 100)
+		findings.append(_finding("FAIL", "TRAVERSAL", msg))
 
 	var player_stuck: int = summary.get("player_stuck_events", 0)
 	if player_stuck > 0:

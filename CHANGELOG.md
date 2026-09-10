@@ -1,5 +1,49 @@
 # Changelog
 
+## [0.19.0] - how far the crew got, not merely whether it finished
+
+Roadmap 128. `route_completion_rate` is a boolean averaged, so it reports 0.0
+whether the crew was wiped on the spawn or reached the objective and then
+cleared the map. Those are not the same level.
+
+### Added
+- `route_progress_rate` in the summary, `route_points_reached` and
+  `route_points_total` per run in the CSV, and the traversal finding now says
+  the number out loud: "It reached 50% of the route's points on average, so
+  the zero above is how often it FINISHED, not how far it got."
+
+  MEASURED on `market_row_001`, three runs per enemy count -- every row scored
+  `route_completion_rate` 0.00:
+
+        enemies 0    progress 1.00    2 of 2 legs    TIMEOUT
+        enemies 1    progress 0.50    1 of 2 legs    ENEMIES_CLEARED
+        enemies 2    progress 0.50    1 of 2 legs    ENEMIES_CLEARED
+        enemies 4    progress 0.17    mostly 0 of 2  TEAM_WIPE
+
+  The crew reaches the objective and THEN clears the enemies, which the
+  boolean recorded as identical to being wiped on the spawn.
+
+  On `restaurant_row_001` it reads 0.00 at every enemy count above zero, and
+  that is also true rather than a failure of the measure: there the crew is in
+  contact before it walks a single leg.
+
+### Two traps, both hit before this was right
+- `_route_index` IS NOT PROGRESS. `_update_stuck` advances it to move a jammed
+  bot along, so it counts points SKIPPED as well as reached. Progress comes
+  from a separate counter that only increments on a genuine arrival, and the
+  test asserts `_update_stuck` never touches it.
+- THE ROUTE'S FIRST POINT IS THE SPAWN. Lot emits `Route_0` at the crew spawn
+  exactly -- measured 0.00 m apart on restaurant_row_001 -- so counting points
+  reached gave every run 1 of 3 for standing still, including a crew wiped at
+  3.4 seconds. Progress is counted in LEGS WALKED, detected by comparing the
+  first point to the body's position rather than assumed, so a route that
+  genuinely starts away from the spawn still counts its first leg.
+
+### Not changed
+- The SCORE. `route_completion_rate` still drives the traversal category
+  exactly as before, and no threshold reads the new figure. This adds a
+  reading; deciding what it should be worth is roadmap 128's remaining half.
+
 ## [0.18.0] - the arrival radius is a property of the body, not of a scene file
 
 Roadmap 123's last arm.

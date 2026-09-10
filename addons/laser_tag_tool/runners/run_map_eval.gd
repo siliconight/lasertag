@@ -213,6 +213,7 @@ func _collect_regions(node: Node, out: Array[NavigationRegion3D]) -> void:
 const DELTA_KEYS := [
 	"avg_time_to_first_contact", "avg_player_survival_seconds",
 	"shots_blocked_by_collision_percent", "route_completion_rate",
+	"route_progress_rate",
 	"enemy_stuck_events", "player_stuck_events",
 ]
 

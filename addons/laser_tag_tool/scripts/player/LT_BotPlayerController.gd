@@ -51,6 +51,18 @@ var cover_points: Array[Vector3] = []
 var gravity: float = float(ProjectSettings.get_setting("physics/3d/default_gravity", 9.8))
 
 var _route_index: int = 0
+## Route points genuinely ARRIVED at, which is not the same as `_route_index`.
+## `_update_stuck` advances the index to move a jammed bot along, so the index
+## counts points SKIPPED as well as reached and cannot answer "how far did the
+## crew get" (roadmap 128). This only ever increments on a real arrival.
+var _route_reached: int = 0
+## 1 when the route's first point IS the spawn, so arriving at it is free.
+## Lot emits `Route_0` at the crew spawn exactly -- measured 0.00 m apart on
+## restaurant_row_001 -- so counting points reached gave every run 1 of 3 for
+## standing still, including a crew wiped at 3.4 seconds. Progress is counted
+## in LEGS WALKED, and this is how many the route starts you with.
+var _route_free_start: int = 0
+var _route_points_dirty: bool = true
 var _fire_timer: float = 0.0
 var _dead: bool = false
 var _recent_hits: int = 0
@@ -81,6 +93,8 @@ func start_route(points: Array[Vector3], covers: Array[Vector3] = []) -> void:
 	route_points = points
 	cover_points = covers
 	_route_index = 0
+	_route_reached = 0
+	_route_points_dirty = true
 	_completed = false
 	_go_to_current_route_point()
 
@@ -176,12 +190,31 @@ func _advance_route(_delta: float) -> void:
 	# is_navigation_finished() so the finished-check is meaningful.
 	_next_path_point()
 
+	if _route_points_dirty:
+		_route_points_dirty = false
+		_route_free_start = 0
+		if not route_points.is_empty() and body != null:
+			var first: Vector3 = route_points[0]
+			var here: Vector3 = body.global_position
+			# Compared flat: the marker sits on the ground and the body's
+			# origin is at its feet, but a lift on either would otherwise read
+			# as distance.
+			if Vector2(first.x - here.x, first.z - here.z).length() <= 1.0:
+				_route_free_start = 1
+
 	if _nav_finished():
 		if _seeking_cover:
 			_seeking_cover = false
 			_go_to_current_route_point()
 			return
 		_route_index += 1
+		_route_reached += 1
+		get_tree().call_group(LT_Const.GROUP_METRICS, "record_event",
+			"RouteProgress", {
+				"source": body.name,
+				"reached": maxi(0, _route_reached - _route_free_start),
+				"total": maxi(0, route_points.size() - _route_free_start),
+			})
 		if _route_index >= route_points.size():
 			_completed = true
 			_stop_horizontal()
