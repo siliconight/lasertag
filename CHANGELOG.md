@@ -66,6 +66,18 @@ they move in both directions (+4 player on 9004, -3 on 9105); seed 9004 crosses
 WARN -> FAIL on a two-point score move, which is a band boundary rather than a
 finding.
 
+Holding the map fixed and varying the RNG seed four times each arm separates
+the two: **player stuck rises 2-4 every time (mean +3.25) -- systematic** --
+while enemy stuck scatters (+3, 0, 0, -2), so the grade cross was
+`stuck_per_run > 0.25` being crossed by a number that moves both ways. The
+score does not move, because the player-stuck penalty is a flat -10 both arms
+already pay.
+
+The obvious mechanism is refuted: "a bot that stops to fight is counted as
+stuck" is already guarded, `_update_stuck` requiring
+`_find_visible_enemy() == null`. What produces the extra three is downstream of
+a different fight rather than a miscount, and it is not established.
+
 That is expected rather than reassuring: the shipped corpus has no geometry
 between 1.10 m and 1.20 m (roadmap 130), so raising an eye from 1.4 to 1.6
 crosses nothing on it. A three-run smoke returned figures identical to four
@@ -90,6 +102,15 @@ Nine of ten move, all in the same direction, on three different maps: every map
 reads as more open and more exposed than it was being reported. Not noise the
 way the stuck counts are -- a systematic correction the size of the 10 cm the
 sampler was measuring below the eye that plays the level.
+
+### Known residue
+`player_stuck_events` rises by about three per 25-run sweep on
+`warehouse_yard_001`, measured across four RNG seeds. It costs no score --
+the penalty is a flat -10 both arms already pay -- and it changes no
+traversal, wipe or kill figure. The mechanism is unestablished, and the
+obvious candidate is refuted above. Recorded rather than absorbed: if a later
+change to the stuck detector or the bot's engagement moves this number, this
+is the baseline it moved from.
 
 ### What this does to the derived cover height
 With every side sighting from 1.6 at a 1.0 chest, the crossing rises from
