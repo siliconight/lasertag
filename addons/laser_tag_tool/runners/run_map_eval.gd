@@ -133,6 +133,16 @@ func _run(harness: LT_MapEvalHarness, scenario: LT_TestScenario,
 ## expectation, and hitting it is reported rather than waited out forever.
 const BAKE_HANDOVER_FRAMES := 240
 
+## `deli_counter/agent_contract.json` `nav_bake`, copied because this runner
+## loads no JSON from another repo; `runners/tests/test_nav_bake_is_the_contract.gd`
+## reads the contract and fails on any difference.
+const NAV_AGENT_RADIUS := 0.4
+const NAV_AGENT_HEIGHT := 1.8
+const NAV_AGENT_MAX_CLIMB := 0.15
+const NAV_AGENT_MAX_SLOPE := 55.0
+const NAV_CELL_SIZE := 0.1
+const NAV_CELL_HEIGHT := 0.15
+
 ## Runtime-bake every NavigationRegion3D under root (for CI and greybox
 ## levels that ship without a baked navmesh). Parses source geometry
 ## from the MAP ROOT using static colliders on the World layer —
@@ -164,13 +174,34 @@ func _bake_navigation(map_root: Node) -> void:
 		# refusal leaves the polygon count at 0 — a refused bake and a map with
 		# no collision at all print the identical number. Every parameter below
 		# is overridden anyway, so reusing the region's resource bought nothing
-		# but that race. A new NavigationMesh also carries the engine-default
-		# cell_size/cell_height, which is what the navigation map itself uses,
-		# so the rasterization-mismatch warning goes with it.
+		# but that race.
+		#
+		# THE CONTRACT'S BAKE, NOT THE ENGINE'S (0.23.1). This set only
+		# agent_radius and left cell 0.25 / cell height 0.25 / climb 0.25 /
+		# height 1.5 / slope 45, the engine defaults -- while Lot's walkers and
+		# Level Factory's nav gate bake at `deli_counter/agent_contract.json`'s
+		# `nav_bake`. Measured on cold run 9058 (twin_a01, objective upstairs):
+		# at 0.25 m cells the 1.30 m front door and the 1.20 m cross-wall door
+		# erode shut (the contract's own rule: a door survives ceil(radius /
+		# cell) cells of erosion a side), the bot's route stopped 6.05 m short
+		# and one real run scored TRAVERSAL 0% -- while Lot's bake of the same
+		# scene path-proved the objective at 81.0 m. Moving cell size and cell
+		# height alone to 0.1 / 0.15 connected every leg. Every value below is
+		# the contract's; `test_nav_bake_is_the_contract.gd` compares them.
+		# The navigation MAP is set to the same cells, or Godot warns of a
+		# rasterization mismatch and the regions do not merge (Lot's
+		# `lot_navqa_setup.gd` does the same).
 		var nav_mesh := NavigationMesh.new()
 		nav_mesh.geometry_parsed_geometry_type = NavigationMesh.PARSED_GEOMETRY_STATIC_COLLIDERS
 		nav_mesh.geometry_collision_mask = 1  # World layer — collision is truth
-		nav_mesh.agent_radius = 0.4  # matches the pill capsule
+		nav_mesh.agent_radius = NAV_AGENT_RADIUS
+		nav_mesh.agent_height = NAV_AGENT_HEIGHT
+		nav_mesh.agent_max_climb = NAV_AGENT_MAX_CLIMB
+		nav_mesh.agent_max_slope = NAV_AGENT_MAX_SLOPE
+		nav_mesh.cell_size = NAV_CELL_SIZE
+		nav_mesh.cell_height = NAV_CELL_HEIGHT
+		NavigationServer3D.map_set_cell_size(region.get_navigation_map(), NAV_CELL_SIZE)
+		NavigationServer3D.map_set_cell_height(region.get_navigation_map(), NAV_CELL_HEIGHT)
 
 		var source := NavigationMeshSourceGeometryData3D.new()
 		NavigationServer3D.parse_source_geometry_data(nav_mesh, source, map_root)

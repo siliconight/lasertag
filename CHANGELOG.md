@@ -1,5 +1,55 @@
 # Changelog
 
+## [0.23.1] - the evaluation bakes the navmesh the contract describes
+
+Cold run 9058 (2026-09-15) was refused before Laser Tag ran: Level Factory's
+pre-flight called `twin_a01`'s upstairs objective sealed. Level Factory 0.88.0
+found that pre-flight cannot see stairs at all -- and that Laser Tag's own bake
+could not reach the objective either, for a reason of its own.
+
+**What this runner baked.** `_bake_navigation` set `agent_radius = 0.4` and
+left every other value at the engine default: cell 0.25, cell height 0.25,
+climb 0.25, agent height 1.5, slope 45. Lot's walkers and Level Factory's nav
+gate bake at `deli_counter/agent_contract.json` `nav_bake`: cell 0.1, cell
+height 0.15, climb 0.15, height 1.8, slope 55, radius 0.4. Measured by Level
+Factory's agent on a scratch copy of the 9058 candidate: at 0.25 m cells
+twin_a01's 1.30 m front door and 1.20 m ground-floor cross-wall door erode
+shut, and the path stops 6.05 m short; at 0.1 / 0.15 every leg connects
+(81.0 m). The contract states why: erosion is ceil(radius / cell) whole cells
+a side, so at 0.25 m cells no door under 1.5 m survives.
+
+**The runner now bakes at the contract's six values** (`NAV_*` constants) and
+sets the navigation map to the same cell size and height, as Lot's
+`lot_navqa_setup.gd` does, so the region and the map rasterise alike.
+
+**Measured on that scratch copy, one run, seed 9058, 4 crew, NO enemies**
+(`--scenario` with `enemies_enabled = false`, so the firefight does not
+decide how far the bot walks -- a first comparison WITH enemies read progress
+33% -> 0% because the crew died at 8.4 s, and is not evidence either way):
+
+| bake | polygons | route progress | furthest waypoint (of 3) | player stuck |
+| --- | --- | --- | --- | --- |
+| engine defaults (0.23.0) | 1,462 | 0.33 | 1, at 0.67 s | 164 |
+| contract (0.23.1) | 2,759 | 0.67 | 2 -- the upstairs objective, all four bots by 21.2 s | 156 |
+
+**NOT FIXED, and now the next finding:** with the contract bake every bot
+reaches the objective and none completes the last leg; 156 stuck events over
+the 180 s run. `PlayerStuck` events carry position (0, 0, 0), so where they
+stall is not recorded. Level Factory's agent saw one crew member stall beside
+the left porch deck (0.20 m, inside the 0.117-0.5 m step band) on the engine
+bake. Unattributed.
+
+Also note: `path_desired_distance` is derived from `map_get_cell_height`
+(`test_arrival_radius_is_derived.gd`, roadmap 123), which was 0.25 on these
+bakes and is now 0.15, so the arrival radius shrinks with this change. The
+no-enemy run above is the only measurement of it; a sweep across the maps
+123 was tuned on was not run.
+
+`runners/tests/test_nav_bake_is_the_contract.gd` reads the contract from the
+factory checkout and fails on any difference, and checks the bake sets each
+value and the map cells; it exits 2 when the contract is absent. On 0.23.0 it
+does not parse (no `NAV_*` constants).
+
 ## [0.23.0] - a run that never threatened the crew cannot certify the map
 
 The gap 0.22.0 exposed. Once roadmap 128 made the traversal category reachable,
