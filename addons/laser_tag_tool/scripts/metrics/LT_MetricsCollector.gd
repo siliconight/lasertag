@@ -131,7 +131,14 @@ func record_event(event_name: String, metadata: Dictionary = {}) -> void:
 			current["route_points_total"] = int(metadata.get("total", 0))
 		"TeamWipe":
 			current["team_wipe"] = true
-	_log_event(event_name, null, Vector3.ZERO, metadata)
+	# Logged where the event happened when it says (0.23.2): the stuck
+	# emitters carry it in `metadata.position`, and a top-level (0, 0, 0)
+	# read as "no position" to every reader of the report.
+	var at := Vector3.ZERO
+	var p: Variant = metadata.get("position", null)
+	if p is Array and (p as Array).size() >= 3:
+		at = Vector3(float(p[0]), float(p[1]), float(p[2]))
+	_log_event(event_name, null, at, metadata)
 
 func _log_event(event_name: String, source: Node, position: Vector3, metadata: Dictionary) -> void:
 	if not record_debug_events:
