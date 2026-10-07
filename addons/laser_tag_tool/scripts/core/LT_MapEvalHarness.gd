@@ -531,6 +531,9 @@ func _apply_body(pill: Node) -> void:
 		"LT_BotPlayerController")
 	if bot_c != null:
 		bot_c.move_speed = scenario.player_walk_speed_mps
+		# THE CONTRACT'S STEP-UP (0.24.0, roadmap 203): the bot lifts itself over
+		# what the contract's player does, onto a top it can stand on.
+		bot_c.max_step_up = scenario.player_max_step_up_m
 
 	var agent: NavigationAgent3D = pill.get_node_or_null("NavigationAgent3D")
 	if agent != null:

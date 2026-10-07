@@ -37,6 +37,10 @@ class_name LT_TestScenario
 @export var player_height_m: float = 1.8
 @export var player_eye_height_m: float = 1.6
 @export var player_walk_speed_mps: float = 4.0
+## The contract's `characters.player.max_step_up_m`: how tall a step the
+## player's controller lifts itself over. The crew bot steps up to this,
+## onto a top it can stand on (0.24.0, roadmap 203). 0 turns step-up off.
+@export var player_max_step_up_m: float = 0.5
 
 ## THE ENEMY'S EYE, AND THE CHEST BOTH SIDES AIM AT. Roadmap 131.
 ##

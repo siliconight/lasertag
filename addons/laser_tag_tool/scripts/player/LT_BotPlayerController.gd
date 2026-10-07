@@ -45,6 +45,32 @@ signal bot_stuck(position: Vector3)
 @export var stuck_window_seconds: float = 4.0
 @export var stuck_distance_threshold: float = 0.5
 
+## THE CONTRACT'S STEP-UP (0.24.0, roadmap 203). `characters.player.
+## max_step_up_m` in `deli_counter/agent_contract.json` is 0.5: the player's
+## controller lifts itself over a step that tall, and a transition above
+## `clearances.unassisted_step_max_m` (0.1025, what a stock capsule walks over)
+## "requires the consumer to have implemented step-up". This bot implemented
+## none, and the navmesh routes over anything up to `agent_max_climb_m` (0.15),
+## so it stopped where the contract's player walks on. Measured on cold run
+## 9194: bank_branch_a04's crew wedged against a stair ramp's open side 0.118 m
+## high -- 1,302 of 1,306 stuck events in one 2 m cell, route completion 8% --
+## while the walktest's walker, which steps, walked past it. The harness sets
+## this from the scenario (`player_max_step_up_m`), which Level Factory fills
+## from the contract. 0 turns step-up off.
+@export var max_step_up: float = 0.5
+## Step-ups taken: what the step-up did, for a reader of a run.
+var steps_taken: int = 0
+
+## How far past the body the step probe looks, and how far above the limit it
+## starts, so a top exactly at `max_step_up` is found. A tolerance, not a
+## derivation: a top narrower than this is not one a body can stand on.
+const STEP_PROBE_MARGIN: float = 0.05
+## A rise below this is the floor's own unevenness, not a step.
+const STEP_MIN_RISE: float = 0.01
+## How squarely the wall must face the walk (cos of 72.5 deg). A wall the bot
+## slides along at a shallower angle is not in its way.
+const STEP_FACING_DOT: float = 0.3
+
 var route_points: Array[Vector3] = []
 var cover_points: Array[Vector3] = []
 
@@ -136,8 +162,72 @@ func _physics_process(delta: float) -> void:
 
 	if not body.is_on_floor():
 		body.velocity.y -= gravity * delta
+	# The way the bot MEANT to go, before the slide turns it along whatever
+	# it hit: the step-up asks about that wall, not about the slide.
+	var intended := Vector3(body.velocity.x, 0.0, body.velocity.z)
 	body.move_and_slide()
+	_try_step_up(intended)
 	_update_stuck(delta)
+
+## A STEP, NEVER A SLOPE (0.24.0, roadmap 203).
+##
+## The lift is the height of a TOP the body can stand on: a surface found
+## straight down, a body-width ahead, whose normal is within the body's own
+## `floor_max_angle`. On a continuous incline a probe ahead always finds a
+## higher surface, so a lift sized by the probe would throw the body up a ramp
+## it cannot stand on (CLAUDE.md, "Step-up cannot rescue a slope"). The step is
+## taken only when the lift and the move onto the top both clear the world.
+func _try_step_up(intended: Vector3) -> bool:
+	if max_step_up <= 0.0 or not body.is_on_floor() or not body.is_on_wall():
+		return false
+	if intended.length() < 0.1:
+		return false
+	var fwd: Vector3 = intended.normalized()
+	if body.get_wall_normal().dot(fwd) > -STEP_FACING_DOT:
+		return false
+	var reach: float = _body_radius() + STEP_PROBE_MARGIN
+	var feet: Vector3 = body.global_position
+	var probe: Vector3 = feet + fwd * reach
+	var excl: Array[RID] = [body.get_rid()]
+	var query := PhysicsRayQueryParameters3D.create(
+		probe + Vector3.UP * (max_step_up + STEP_PROBE_MARGIN),
+		probe + Vector3.DOWN * STEP_PROBE_MARGIN, LT_Const.LAYER_WORLD, excl)
+	var hit: Dictionary = body.get_world_3d().direct_space_state.intersect_ray(query)
+	if hit.is_empty():
+		return false
+	var top: Vector3 = hit["position"]
+	var normal: Vector3 = hit["normal"]
+	var rise: float = top.y - feet.y
+	if rise <= STEP_MIN_RISE or rise > max_step_up:
+		return false
+	if normal.angle_to(Vector3.UP) > body.floor_max_angle:
+		return false
+	# THE TOP'S HEIGHT FIRST, THE FULL LIFT SECOND. A top that rises ACROSS the
+	# walk -- a stair ramp met from its open side, the bank's case -- stands
+	# higher under the capsule's uphill side than under its centre, so a lift
+	# sized to the centre leaves that side inside the ramp and the move refuses
+	# it. The contract's full lift is tried before giving up: the body still
+	# lands on the top it was cleared for, and never above max_step_up.
+	var lifts: Array[float] = [rise + STEP_PROBE_MARGIN, max_step_up + STEP_PROBE_MARGIN]
+	for lift_height: float in lifts:
+		var lift: Vector3 = Vector3.UP * lift_height
+		if body.test_move(body.global_transform, lift):
+			continue
+		if body.test_move(body.global_transform.translated(lift), fwd * reach):
+			continue
+		body.global_position = feet + lift + fwd * reach
+		body.velocity.y = 0.0
+		steps_taken += 1
+		return true
+	return false
+
+
+func _body_radius() -> float:
+	var shape_node := body.get_node_or_null("CollisionShape3D") as CollisionShape3D
+	if shape_node != null and shape_node.shape is CapsuleShape3D:
+		return (shape_node.shape as CapsuleShape3D).radius
+	return nav_agent.radius if nav_agent != null else 0.35
+
 
 func _fire_at(enemy: Node3D) -> void:
 	if shooter == null or shooter.muzzle == null:
