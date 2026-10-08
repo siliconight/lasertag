@@ -574,7 +574,7 @@ func _configure_player(pill: Node, bot: bool) -> void:
 		# (roadmap 128). `route_completed` was declared, emitted at the end of
 		# the route, and connected by no one -- so finishing the route was
 		# recorded in the metrics and could not end the run.
-		bot_controller.route_completed.connect(_on_route_walked)
+		bot_controller.route_completed.connect(_on_route_walked.bind(bot_controller))
 		bot_controller.start_route(_bot_route(), _points_to_positions(cover_points))
 	else:
 		bot_controller.set_physics_process(false)
@@ -783,10 +783,15 @@ func _route_outstanding() -> bool:
 ## The crew finished the route. Ends the run when the guards are already down,
 ## and otherwise lets the fight carry on -- a crew that reaches extraction with
 ## guards still standing has not finished the mission.
-func _on_route_walked() -> void:
+##
+## A route that ENDED ON A SKIP was not walked (0.25.0, roadmap 206): the
+## walk is over, so nothing waits on it, but with the guards down the run
+## ends as ENEMIES_CLEARED -- what happened -- and not as OBJECTIVE.
+func _on_route_walked(bot: LT_BotPlayerController) -> void:
 	_route_walked = true
 	if _enemies_cleared:
-		run_state.end_run(LT_RunState.EndReason.OBJECTIVE)
+		run_state.end_run(LT_RunState.EndReason.OBJECTIVE if bot.walked_whole_route()
+			else LT_RunState.EndReason.ENEMIES_CLEARED)
 
 func _on_run_ended(_run_id: int, reason: String) -> void:
 	metrics.end_run(reason)

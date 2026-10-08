@@ -322,8 +322,16 @@ func _advance_route(_delta: float) -> void:
 			# `route_completion_rate` read 0.00 on a route the crew had just
 			# finished walking. Measured: `ObjectiveReached` 24 -> 0 on
 			# restaurant_row_001 seed 9003 with no enemies at all.
-			get_tree().call_group(LT_Const.GROUP_METRICS, "record_event",
-				"ObjectiveReached", {"source": body.name})
+			# A ROUTE ENDED ON A SKIP IS NOT A ROUTE WALKED (0.25.0, roadmap
+			# 206): `route_walked` asks the arrivals, not the index. Said as
+			# `RouteEndedShort` so the run's log shows where it fell short.
+			if route_walked(_route_reached, route_points.size()):
+				get_tree().call_group(LT_Const.GROUP_METRICS, "record_event",
+					"ObjectiveReached", {"source": body.name})
+			else:
+				get_tree().call_group(LT_Const.GROUP_METRICS, "record_event",
+					"RouteEndedShort", {"source": body.name,
+						"reached": _route_reached, "total": route_points.size()})
 			route_completed.emit()
 			return
 		_go_to_current_route_point()
@@ -337,6 +345,25 @@ func _advance_route(_delta: float) -> void:
 		_face_point(body.global_position + direction)
 	else:
 		_stop_horizontal()
+
+## A ROUTE IS WALKED WHEN EVERY POINT ON IT WAS REACHED (0.25.0, roadmap
+## 206). `_update_stuck` advances `_route_index` past a point the bot is
+## jammed on, so an index that runs off the end says the route ENDED, not
+## that it was walked -- and `ObjectiveReached`, which is all
+## `route_completion_rate` reads, used to fire on the index. With the
+## getaway van the route ends where it starts (spawn, objective, the van at
+## the spawn), and a bot jammed in its first seconds was skipped to "back
+## at the van" while standing beside it: a finished heist, recorded for a
+## crew that never left. `_route_reached` counts real arrivals only
+## (roadmap 128); this asks it.
+static func route_walked(reached: int, total: int) -> bool:
+	return total > 0 and reached >= total
+
+
+## True once this bot's route has ended with every point reached.
+func walked_whole_route() -> bool:
+	return _completed and route_walked(_route_reached, route_points.size())
+
 
 func _go_to_current_route_point() -> void:
 	if _route_index < route_points.size():
