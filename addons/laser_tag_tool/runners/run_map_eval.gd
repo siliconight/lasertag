@@ -4,7 +4,7 @@ extends SceneTree
 ## Usage (note the `--` separator before tool args — Godot 4 passes
 ## everything after it through as user args):
 ##
-##   godot --headless --path . -s res://addons/laser_tag_tool/runners/run_map_eval.gd -- \
+##   godot --headless --fixed-fps 60 --path . -s res://addons/laser_tag_tool/runners/run_map_eval.gd -- \
 ##     --map res://levels/gas_station_test.tscn \
 ##     --scenario res://addons/laser_tag_tool/resources/default_laser_tag_scenario.tres \
 ##     --runs 25 \
@@ -14,10 +14,24 @@ extends SceneTree
 ##   --seed N          deterministic runs (run i seeds with N + i)
 ##   --baseline PATH   diff score/metrics against a previous report JSON
 ##   --bake-nav        runtime-bake NavigationRegion3D nodes before eval
-##   --time-scale X    sim speed multiplier (default 4.0)
+##   --time-scale X    the physics step's multiplier (default 4.0: Godot scales
+##                     the step, so 4 simulates at 1/15 s where the game steps
+##                     at 1/60)
 ##   --enemies N --players N --max-run-time SECONDS
 ##
 ## Args without `--` also work for compatibility with the TDD examples.
+##
+## THE CLOCK (0.27.0, factory roadmap 239). `--fixed-fps 60` is an ENGINE
+## argument, before `--`: each frame is one physics step (the project's 60
+## ticks), computed as fast as the processor allows. Without it Godot paces the
+## run to `--time-scale` x real seconds -- measured on cold runs 9245 and 9247,
+## every evaluation simulated 3.91 to 3.97 times its wall time, so most of a
+## ten-minute job was waiting; cold run 9247's seed_9104 took 593 s that way and
+## 21 s under the fixed clock, its report identical in every field. The two
+## clocks read the same because the navigation map updates on this thread
+## (`LT_Const.synchronous_navigation`, in `_run`); the engine does not tell a
+## script which clock it runs on (`OS.get_cmdline_args` omits `--fixed-fps`),
+## so the caller chooses it and nothing here can check.
 
 const HarnessScript := preload("../scripts/core/LT_MapEvalHarness.gd")
 const ScenarioScript := preload("../resources/LT_TestScenario.gd")
@@ -62,8 +76,11 @@ func _initialize() -> void:
 	var output_path: String = args.get("output",
 		"user://reports/%s_eval.json" % map_path.get_file().get_basename())
 
-	# Headless evaluation shouldn't wait on real-world seconds. Raise the
-	# per-frame physics step cap so high time scales don't fall behind.
+	# THE STEP, NOT THE SPEED. `time_scale` multiplies the physics step (4 is
+	# 1/15 s). This comment said "headless evaluation shouldn't wait on
+	# real-world seconds"; measured, it did, and does unless the engine runs
+	# under `--fixed-fps` (the header). The step cap lets a synchronised clock
+	# catch up after a slow frame; under a fixed clock a frame is one step.
 	Engine.time_scale = float(args.get("time-scale", 4.0))
 	Engine.max_physics_steps_per_frame = maxi(8, int(Engine.time_scale) * 2 + 4)
 
@@ -94,6 +111,17 @@ func _initialize() -> void:
 func _run(harness: LT_MapEvalHarness, scenario: LT_TestScenario,
 		output_path: String, map_path: String, scenario_path: String,
 		args: Dictionary) -> void:
+	# THE MAP UPDATES ON THIS THREAD (0.27.0): `LT_Const.synchronous_navigation`,
+	# before the bake, so the bake's own region update is synchronous too. Its
+	# setters land at the next sync, so a physics frame passes before they are
+	# read back: a dial confirmed, not assumed.
+	var regions: int = LT_Const.synchronous_navigation(harness.get_parent())
+	await physics_frame
+	if LT_Const.navigation_is_synchronous(harness.get_parent()):
+		print("[LT] navigation: the map and %d region(s) update on this thread" % regions)
+	else:
+		push_warning("[LT] navigation still updates on worker threads: when an "
+			+ "update lands is wall time, so this report may not repeat")
 	if args.has("bake-nav"):
 		await _bake_navigation(harness.get_parent())
 

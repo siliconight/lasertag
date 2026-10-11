@@ -112,6 +112,48 @@ static func arrival_radius(radius: float, speed: float, ticks: float,
 	var vertical: float = cell_height * 0.5
 	return sqrt(horizontal * horizontal + vertical * vertical)
 
+## THE NAVIGATION MAP UPDATES ON THE CALLER'S THREAD (0.27.0, factory roadmap
+## 239). Godot 4.7 runs a map's and a region's iterations on worker threads
+## unless told otherwise, so WHEN a navigation update lands is wall time, and
+## an evaluation that reads it repeats only as far as the machine is idle:
+## three evaluations at once moved a few event positions by 0.01 m, and the
+## engine's `--fixed-fps` clock moved a crew's stuck count 9 -> 21 with the
+## physics step unchanged. Synchronous, every report measured read the same
+## under either clock and any load. This sets the world's map, every region
+## under `scene_root` and each region's own map, and returns how many regions
+## it set. The setters are server COMMANDS that land at the next sync -- read
+## straight back they still say asynchronous (measured) -- so a caller lets a
+## physics frame pass before it asks `navigation_is_synchronous`.
+static func synchronous_navigation(scene_root: Node) -> int:
+	var count := 0
+	var viewport: Viewport = scene_root.get_viewport()
+	if viewport != null and viewport.get_world_3d() != null:
+		NavigationServer3D.map_set_use_async_iterations(
+			viewport.get_world_3d().navigation_map, false)
+	for node in scene_root.find_children("*", "NavigationRegion3D", true, false):
+		var region: NavigationRegion3D = node as NavigationRegion3D
+		if region.get_navigation_map().is_valid():
+			NavigationServer3D.map_set_use_async_iterations(region.get_navigation_map(), false)
+		NavigationServer3D.region_set_use_async_iterations(region.get_rid(), false)
+		count += 1
+	return count
+
+## Whether the world's map and every region under `scene_root` (and its map)
+## update synchronously: the dial read back, once the commands have landed.
+static func navigation_is_synchronous(scene_root: Node) -> bool:
+	var viewport: Viewport = scene_root.get_viewport()
+	if viewport != null and viewport.get_world_3d() != null:
+		if NavigationServer3D.map_get_use_async_iterations(viewport.get_world_3d().navigation_map):
+			return false
+	for node in scene_root.find_children("*", "NavigationRegion3D", true, false):
+		var region: NavigationRegion3D = node as NavigationRegion3D
+		if NavigationServer3D.region_get_use_async_iterations(region.get_rid()):
+			return false
+		if region.get_navigation_map().is_valid() \
+				and NavigationServer3D.map_get_use_async_iterations(region.get_navigation_map()):
+			return false
+	return true
+
 static func _ensure_key(action: StringName, keycode: Key) -> void:
 	if InputMap.has_action(action):
 		return
