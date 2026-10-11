@@ -624,6 +624,15 @@ func spawn_enemies() -> void:
 		_live_pills.append(pill)
 
 func _configure_enemy(pill: Node) -> void:
+	# THE ENEMY'S BODY IS THE CONTRACT'S (0.26.0, roadmap 197). `_apply_body`
+	# built only the crew, and every enemy kept `LT_EnemyPill.tscn`'s capsule
+	# of radius 0.40 -- the BAKE's agent radius, which agent_contract.json says
+	# "is NOT a body radius and nothing should be built from it" -- so it met
+	# every corner the navmesh rounds by 0.40 with no clearance at all.
+	# npc_standard shares the player's metrics until a distinct class ships
+	# (the reason the eye below reads one field), so the crew's fields build it;
+	# the camera and controller parts of `_apply_body` find nothing on an enemy.
+	_apply_body(pill)
 	var health: LT_Health = pill.get_node("LT_Health")
 	health.max_health = scenario.enemy_health
 	health.reset_health()

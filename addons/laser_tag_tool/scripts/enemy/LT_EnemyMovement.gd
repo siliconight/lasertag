@@ -22,6 +22,8 @@ var _wants_to_move: bool = false
 var _stuck_timer: float = 0.0
 var _stuck_anchor: Vector3 = Vector3.ZERO
 var _stuck_reported: bool = false
+## Set once the agent has its arrival radius and path height offset (0.26.0).
+var _aligned: bool = false
 
 func _ready() -> void:
 	if body == null and get_parent() is CharacterBody3D:
@@ -34,9 +36,33 @@ func _ready() -> void:
 func set_destination(destination: Vector3) -> void:
 	_wants_to_move = true
 	if use_navigation and nav_agent != null:
+		_align_agent_to_mesh()
 		nav_agent.target_position = destination
 	else:
 		set_meta("lt_direct_target", destination)
+
+## Steer the enemy as the crew is steered (0.26.0, roadmap 197): the arrival
+## radius from the body and the bake, and every returned path point lowered
+## by the bake's cell height to the feet that walk to it -- what
+## `LT_BotPlayerController._align_agent_to_mesh` has done for the crew since
+## 0.18.0. The pill scene's `path_desired_distance` 0.8 counts a waypoint
+## reached from 0.8 m away, so at a door the body turns for the next one
+## before it is through and walks into the jamb; 0.18.0 measured exactly
+## that for the crew. Read from the MAP once one is known, so a different
+## bake stays right without an edit here; `nav_agent.radius` is the body's,
+## set by the harness from the scenario.
+func _align_agent_to_mesh() -> void:
+	if _aligned or nav_agent == null:
+		return
+	var map: RID = nav_agent.get_navigation_map()
+	if not map.is_valid():
+		return
+	var cell_height: float = NavigationServer3D.map_get_cell_height(map)
+	nav_agent.path_height_offset = cell_height
+	nav_agent.path_desired_distance = LT_Const.arrival_radius(
+		nav_agent.radius, move_speed,
+		float(Engine.physics_ticks_per_second), cell_height)
+	_aligned = true
 
 func stop() -> void:
 	_wants_to_move = false

@@ -510,9 +510,10 @@ func _align_agent_to_mesh() -> void:
 	# that is 0.44, against the 0.8 it replaces. A SMALLER number is the
 	# direction that stalls, so this is measured rather than reasoned: see the
 	# A/B in Laser Tag's changelog for the run either side.
-	var ticks: float = maxf(1.0, float(Engine.physics_ticks_per_second))
-	var per_frame: float = move_speed / ticks
-	var horizontal: float = maxf(0.05, nav_agent.radius) + per_frame
-	var vertical: float = cell_height * 0.5
-	nav_agent.path_desired_distance = sqrt(
-		horizontal * horizontal + vertical * vertical)
+	#
+	# ONE DEFINITION FOR EVERY BODY since 0.26.0 (`LT_Const.arrival_radius`):
+	# the enemy derives its own from the same terms, where it used to keep the
+	# pill scene's 0.8. The same number here as before, to the bit.
+	nav_agent.path_desired_distance = LT_Const.arrival_radius(
+		nav_agent.radius, move_speed,
+		float(Engine.physics_ticks_per_second), cell_height)

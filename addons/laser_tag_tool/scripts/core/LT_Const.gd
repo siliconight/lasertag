@@ -98,6 +98,20 @@ static func spawn_ring_offset(reuse_index: int) -> Vector3:
 	var radius := 1.0 + 0.25 * float(reuse_index)
 	return Vector3(cos(angle) * radius, 0.0, sin(angle) * radius)
 
+## How near a waypoint must be before a body counts it reached -- ONE
+## definition for every body (0.26.0). Three terms, combined in 3D because
+## Godot measures `path_desired_distance` that way: the body's radius (a
+## waypoint inside its own footprint IS reached), one physics tick of travel
+## (below it the body steps over the threshold between two samples), and half
+## a cell height (what `path_height_offset` cannot remove). The crew's
+## controller derived this inline from 0.18.0; the enemy took the pill
+## scene's 0.8 until 0.26.0 -- the value 0.18.0 measured cutting corners.
+static func arrival_radius(radius: float, speed: float, ticks: float,
+		cell_height: float) -> float:
+	var horizontal: float = maxf(0.05, radius) + speed / maxf(1.0, ticks)
+	var vertical: float = cell_height * 0.5
+	return sqrt(horizontal * horizontal + vertical * vertical)
+
 static func _ensure_key(action: StringName, keycode: Key) -> void:
 	if InputMap.has_action(action):
 		return
