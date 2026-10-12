@@ -167,7 +167,8 @@ func _physics_process(delta: float) -> void:
 	var intended := Vector3(body.velocity.x, 0.0, body.velocity.z)
 	body.move_and_slide()
 	_try_step_up(intended)
-	_update_stuck(delta)
+	# a stand to fight restarts the stuck window (0.28.0): see `_update_stuck`
+	_update_stuck(delta, enemy != null and not advance_while_engaging)
 
 ## A STEP, NEVER A SLOPE (0.24.0, roadmap 203).
 ##
@@ -418,8 +419,25 @@ func _on_damaged(_current: int, _max: int) -> void:
 		_recent_hits = 0
 		_set_destination(nearest)
 
-func _update_stuck(delta: float) -> void:
+## A STAND TO FIGHT RESTARTS THE STUCK WINDOW (0.28.0, factory roadmap 242).
+## The window asked about an enemy only as it closed, so a bot that stood to
+## fight all window (`advance_while_engaging` off: it stops) and lost sight of
+## its enemy at that instant read as stuck -- 10 traversal points and a
+## skipped route point. Measured in the factory (`docs/findings/route_snag/`):
+## 18 of the 21 stuck events a draft added on five lots were such windows, an
+## enemy in sight in 59 or 60 of their 60 frames. So a frame the bot stands to
+## fight restarts the window: stuck means four seconds with no stand to fight
+## in which the body moved less than `stuck_distance_threshold`. A bot
+## advancing while engaging is trying to move; its window runs on as before.
+## (`LT_EnemyMovement._update_stuck` restarts a guard's window whenever it is
+## not trying to move; here only a stand to fight does, so a bot hung on a
+## path point under its own feet is still counted.)
+func _update_stuck(delta: float, standing_to_fight: bool = false) -> void:
 	if _completed or _dead or route_points.is_empty():
+		return
+	if standing_to_fight:
+		_stuck_timer = 0.0
+		_stuck_anchor = body.global_position
 		return
 	_stuck_timer += delta
 	if _stuck_timer >= stuck_window_seconds:
