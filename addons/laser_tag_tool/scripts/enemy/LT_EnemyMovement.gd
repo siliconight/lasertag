@@ -7,14 +7,26 @@ class_name LT_EnemyMovement
 signal stuck_detected(position: Vector3)
 ## Held by another bot's body and by nothing of the level (0.30.0, factory roadmap 242). Every guard
 ## in SEEK paths to the same crew member through the same corners and none steers round another,
-## so a guard behind a guard stood still and was `stuck_detected` -- 73 of 75 such events traced on
-## the factory's lots -- and NPC Pathing charged the map for the bots' own crowding.
+## so a guard behind a guard stood still and was `stuck_detected` -- 74 of 75 such events traced on
+## the factory's lots had another body among their contacts -- and NPC Pathing charged the map for
+## the bots' own crowding.
 signal blocked_detected(position: Vector3)
 
 @export var body: CharacterBody3D
 @export var nav_agent: NavigationAgent3D
 @export var move_speed: float = 4.0
 @export var use_navigation: bool = true
+
+## THE GUARD WALKS AS THE CREW DOES (0.31.0, factory roadmap 242): `LT_Steering`, the crew bot's
+## own copy. `agent_contract.json` says npc_standard shares the player's metrics until a distinct
+## class ships, so the harness sets this from the scenario's `player_max_step_up_m` (0.5), as it
+## sets the crew's. 0 turns step-up off.
+@export var max_step_up: float = 0.5
+## Keep each step on the mesh the guard plans on, as the crew has since 0.29.0. Off, the guard steers
+## straight at its next path point, as it did before 0.31.0.
+@export var keep_to_mesh: bool = true
+## Step-ups taken: what the step-up did, for a reader of a run.
+var steps_taken: int = 0
 
 ## Considered stuck when displacement over the window is below threshold
 ## while actively trying to move.
@@ -96,8 +108,11 @@ func _physics_process(delta: float) -> void:
 		flat.y = 0.0
 		if flat.length() > 0.05:
 			var direction := flat.normalized()
-			body.velocity.x = direction.x * move_speed
-			body.velocity.z = direction.z * move_speed
+			var v: Vector3 = direction * move_speed
+			if keep_to_mesh and use_navigation:
+				v = LT_Steering.velocity_on_mesh(body, nav_agent, v, delta)
+			body.velocity.x = v.x
+			body.velocity.z = v.z
 			_face(direction)
 		else:
 			body.velocity.x = 0.0
@@ -106,7 +121,12 @@ func _physics_process(delta: float) -> void:
 		body.velocity.x = move_toward(body.velocity.x, 0.0, move_speed)
 		body.velocity.z = move_toward(body.velocity.z, 0.0, move_speed)
 
+	# the way the guard MEANT to go, before the slide turns it along whatever it hit: the step-up
+	# asks about that wall, not about the slide (0.31.0, the crew's since 0.24.0)
+	var intended := Vector3(body.velocity.x, 0.0, body.velocity.z)
 	body.move_and_slide()
+	if LT_Steering.try_step_up(body, nav_agent, intended, max_step_up):
+		steps_taken += 1
 	_update_stuck(delta)
 
 func _next_point() -> Vector3:

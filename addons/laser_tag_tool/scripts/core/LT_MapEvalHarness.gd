@@ -535,6 +535,13 @@ func _apply_body(pill: Node) -> void:
 		# what the contract's player does, onto a top it can stand on.
 		bot_c.max_step_up = scenario.player_max_step_up_m
 
+	# THE GUARD'S STEP-UP (0.31.0, roadmap 242): npc_standard shares the player's
+	# metrics until a distinct class ships (`agent_contract.json`), so a guard
+	# lifts itself over what the crew does.
+	var guard: LT_EnemyMovement = pill.get_node_or_null("LT_EnemyMovement")
+	if guard != null:
+		guard.max_step_up = scenario.player_max_step_up_m
+
 	var agent: NavigationAgent3D = pill.get_node_or_null("NavigationAgent3D")
 	if agent != null:
 		agent.radius = r
