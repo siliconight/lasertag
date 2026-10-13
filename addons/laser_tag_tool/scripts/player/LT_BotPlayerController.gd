@@ -71,6 +71,17 @@ const STEP_MIN_RISE: float = 0.01
 ## slides along at a shallower angle is not in its way.
 const STEP_FACING_DOT: float = 0.3
 
+## THE BODY KEEPS TO THE MESH IT PLANS ON (0.29.0, factory roadmap 242).
+## How far the end of a step may sit from the mesh before it is turned back
+## onto it: a centimetre, against the 5 cm the contract's bake (0.4 m) leaves
+## the 0.35 m body. A tolerance for the closest-point query's own rounding,
+## not a clearance.
+const MESH_TOLERANCE_M: float = 0.01
+## A nearest mesh point more than this above or below the step's end is on
+## another level -- a floor above, a ramp's far side -- and not the step's to
+## judge: the contract's step (`player_max_step_up_m`, 0.5).
+const MESH_LEVEL_M: float = 0.5
+
 var route_points: Array[Vector3] = []
 var cover_points: Array[Vector3] = []
 
@@ -278,7 +289,7 @@ func _find_visible_enemy() -> Node3D:
 			best_distance = distance
 	return best
 
-func _advance_route(_delta: float) -> void:
+func _advance_route(delta: float) -> void:
 	if route_points.is_empty():
 		return
 
@@ -345,11 +356,45 @@ func _advance_route(_delta: float) -> void:
 	flat.y = 0.0
 	if flat.length() > 0.05:
 		var direction := flat.normalized()
-		body.velocity.x = direction.x * move_speed
-		body.velocity.z = direction.z * move_speed
+		var v: Vector3 = _velocity_on_mesh(direction * move_speed, delta)
+		body.velocity.x = v.x
+		body.velocity.z = v.z
 		_face_point(body.global_position + direction)
 	else:
 		_stop_horizontal()
+
+## THE BODY KEEPS TO THE MESH IT PLANS ON (0.29.0, factory roadmap 242).
+## The bot turns toward its next path point once within its arrival radius,
+## about 0.44 m (`LT_Const.arrival_radius`), and the straight line from there
+## to a point round a corner cuts the corner: off the mesh, into the 0.4 m the
+## contract's bake keeps from every collider, where the 0.35 m body has 5 cm.
+## Measured in the factory (`docs/findings/route_snag/`): on restaurant_row_001
+## 64 of a candidate's 72 player-stuck events stood at one deli counter's
+## corner, pinned by Godot Physics; across sixteen lots Jolt pinned bodies at
+## other corners. So a step whose end leaves the mesh is turned toward the
+## mesh's nearest point to that end, at no more than the speed it had: the
+## body slides along the mesh's edge round the corner at the bake's clearance.
+## `velocity` is horizontal; what comes back is too.
+func _velocity_on_mesh(velocity: Vector3, delta: float) -> Vector3:
+	if not use_navigation or nav_agent == null or delta <= 0.0:
+		return velocity
+	var map: RID = nav_agent.get_navigation_map()
+	if not map.is_valid() or NavigationServer3D.map_get_iteration_id(map) == 0:
+		return velocity
+	var here: Vector3 = body.global_position
+	var want: Vector3 = here + Vector3(velocity.x, 0.0, velocity.z) * delta
+	# the mesh sits a cell above the floor the feet stand on (`path_height_offset`)
+	var lift: float = NavigationServer3D.map_get_cell_height(map)
+	var on: Vector3 = NavigationServer3D.map_get_closest_point(map, want + Vector3.UP * lift)
+	if absf(on.y - lift - want.y) > MESH_LEVEL_M:
+		return velocity
+	if Vector2(on.x - want.x, on.z - want.z).length() <= MESH_TOLERANCE_M:
+		return velocity
+	var to_mesh: Vector3 = Vector3(on.x - here.x, 0.0, on.z - here.z) / delta
+	var speed: float = Vector2(velocity.x, velocity.z).length()
+	if to_mesh.length() > speed:
+		to_mesh = to_mesh.normalized() * speed
+	return to_mesh
 
 ## A ROUTE IS WALKED WHEN EVERY POINT ON IT WAS REACHED (0.25.0, roadmap
 ## 206). `_update_stuck` advances `_route_index` past a point the bot is
