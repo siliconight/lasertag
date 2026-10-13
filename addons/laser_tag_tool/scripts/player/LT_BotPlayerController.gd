@@ -301,10 +301,14 @@ func _advance_route(_delta: float) -> void:
 	if _nav_finished():
 		if _seeking_cover:
 			_seeking_cover = false
+			# a cover point reached restarts the stuck window (0.28.1)
+			_restart_stuck_window()
 			_go_to_current_route_point()
 			return
 		_route_index += 1
 		_route_reached += 1
+		# a route point reached restarts the stuck window (0.28.1)
+		_restart_stuck_window()
 		get_tree().call_group(LT_Const.GROUP_METRICS, "record_event",
 			"RouteProgress", {
 				"source": body.name,
@@ -436,8 +440,7 @@ func _update_stuck(delta: float, standing_to_fight: bool = false) -> void:
 	if _completed or _dead or route_points.is_empty():
 		return
 	if standing_to_fight:
-		_stuck_timer = 0.0
-		_stuck_anchor = body.global_position
+		_restart_stuck_window()
 		return
 	_stuck_timer += delta
 	if _stuck_timer >= stuck_window_seconds:
@@ -453,6 +456,19 @@ func _update_stuck(delta: float, standing_to_fight: bool = false) -> void:
 			_go_to_current_route_point()
 		_stuck_timer = 0.0
 		_stuck_anchor = body.global_position
+
+## RESTART THE STUCK WINDOW where the body stands: on a stand to fight
+## (0.28.0) and on reaching a destination, a route point or a cover point
+## (0.28.1, factory roadmap 242). The window measures NET displacement, so a
+## body that walked out to a route point and back inside one window -- an
+## objective down a short corridor -- ended near where the window began and
+## read as stuck. Measured in the factory (`docs/findings/route_snag/`): every
+## stuck event 0.28.0 added over its sixteen lots was such a round trip, the
+## route point reached halfway through the window. An arrival is progress; a
+## jam after it still counts, a window later.
+func _restart_stuck_window() -> void:
+	_stuck_timer = 0.0
+	_stuck_anchor = body.global_position
 
 func _stop_horizontal() -> void:
 	body.velocity.x = 0.0
