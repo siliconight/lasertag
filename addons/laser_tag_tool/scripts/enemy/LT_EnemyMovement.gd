@@ -5,6 +5,11 @@ class_name LT_EnemyMovement
 ## simple stuck detection.
 
 signal stuck_detected(position: Vector3)
+## Held by another bot's body and by nothing of the level (0.30.0, factory roadmap 242). Every guard
+## in SEEK paths to the same crew member through the same corners and none steers round another,
+## so a guard behind a guard stood still and was `stuck_detected` -- 73 of 75 such events traced on
+## the factory's lots -- and NPC Pathing charged the map for the bots' own crowding.
+signal blocked_detected(position: Vector3)
 
 @export var body: CharacterBody3D
 @export var nav_agent: NavigationAgent3D
@@ -129,8 +134,27 @@ func _update_stuck(delta: float) -> void:
 		var moved := body.global_position.distance_to(_stuck_anchor)
 		if moved < stuck_distance_threshold and not _stuck_reported:
 			_stuck_reported = true
-			stuck_detected.emit(body.global_position)
+			if _held_by_a_body():
+				blocked_detected.emit(body.global_position)
+			else:
+				stuck_detected.emit(body.global_position)
 		_stuck_timer = 0.0
 		_stuck_anchor = body.global_position
 		if moved >= stuck_distance_threshold:
 			_stuck_reported = false
+
+## Whether this frame's move was held by another bot's body and by nothing of the level (0.30.0).
+## `_update_stuck` runs right after `move_and_slide`, so these are the closing frame's contacts. A
+## contact under the feet is the floor, not a hold; any other contact that is not a body -- a wall,
+## a prop -- is the level's, and the guard is stuck as before.
+func _held_by_a_body() -> bool:
+	var by_body := false
+	for i in range(body.get_slide_collision_count()):
+		var c: KinematicCollision3D = body.get_slide_collision(i)
+		if c.get_normal().angle_to(Vector3.UP) <= body.floor_max_angle:
+			continue
+		if c.get_collider() is CharacterBody3D:
+			by_body = true
+		else:
+			return false
+	return by_body

@@ -33,6 +33,8 @@ func begin_run(run_id: int, player_count: int, enemy_count: int) -> void:
 		"enemy_deaths": 0,
 		"player_stuck_events": 0,
 		"enemy_stuck_events": 0,
+		# a guard held by another bot's body (0.30.0): reported, not scored
+		"enemy_blocked_events": 0,
 		"time_to_first_contact": -1.0,
 		"time_to_first_player_shot": -1.0,
 		"time_to_first_enemy_shot": -1.0,
@@ -120,6 +122,8 @@ func record_event(event_name: String, metadata: Dictionary = {}) -> void:
 			current["player_stuck_events"] += 1
 		"EnemyStuck":
 			current["enemy_stuck_events"] += 1
+		"EnemyBlocked":
+			current["enemy_blocked_events"] += 1
 		"ObjectiveReached":
 			current["route_completed"] = true
 		"RouteProgress":
@@ -192,6 +196,8 @@ func summary() -> Dictionary:
 		"enemy_deaths": _sum(runs, "enemy_deaths"),
 		"player_stuck_events": _sum(runs, "player_stuck_events"),
 		"enemy_stuck_events": _sum(runs, "enemy_stuck_events"),
+		# a guard held by another bot's body (0.30.0): reported, never scored
+		"enemy_blocked_events": _sum(runs, "enemy_blocked_events"),
 		# THE SAME NUMBERS WITH THEIR UNITS ON (roadmap 132). A raw count
 		# depends on how many runs the sweep did and how many bodies were in
 		# them, so it cannot be compared between maps or between sweeps -- and

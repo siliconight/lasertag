@@ -46,6 +46,7 @@ func _ready() -> void:
 		eye = _body.get_node("Marker3D_Eye")
 	if movement != null:
 		movement.stuck_detected.connect(_on_stuck)
+		movement.blocked_detected.connect(_on_blocked)
 	if _body != null and _body.has_node("LT_Health"):
 		var health: LT_Health = _body.get_node("LT_Health")
 		health.died.connect(_on_died)
@@ -144,9 +145,18 @@ func _back_away() -> void:
 	movement.set_destination(_body.global_position + away.normalized() * 4.0)
 
 func _on_stuck(position: Vector3) -> void:
+	_held(position, "EnemyStuck")
+
+## Held by another bot's body, not by the level (0.30.0, factory roadmap 242). Handled as a stuck
+## guard is -- the same state, the same jitter, the same random draws, so every fight plays as it
+## did -- and recorded as `EnemyBlocked`, which NPC Pathing does not charge to the map.
+func _on_blocked(position: Vector3) -> void:
+	_held(position, "EnemyBlocked")
+
+func _held(position: Vector3, event_name: String) -> void:
 	stuck_count += 1
 	state = State.STUCK
-	get_tree().call_group(LT_Const.GROUP_METRICS, "record_event", "EnemyStuck", {
+	get_tree().call_group(LT_Const.GROUP_METRICS, "record_event", event_name, {
 		"source": _source_name(),
 		"position": [position.x, position.y, position.z],
 		"stuck_count": stuck_count,
