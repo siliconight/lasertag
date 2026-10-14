@@ -247,8 +247,29 @@ func _advance_route(delta: float) -> void:
 			_restart_stuck_window()
 			_go_to_current_route_point()
 			return
+		# AN ARRIVAL IS AT THE POINT, NOT AT THE END OF A PATH THAT STOPS SHORT
+		# OF IT (0.32.0, factory roadmap 246). `_nav_finished()` is the end of the
+		# path the navigation server returned, which for a route point the
+		# network does not reach is the closest point it does. Counted as an
+		# arrival, cold run 9185's restaurant_row_001 seed_9003 read route
+		# completion 1.00 in every run while its objective stood on a navmesh
+		# island: traced, every crew bot "arrived" 61.2 m from it, 2.5 m from
+		# its spawn. A point whose path stops short is passed as a jammed one is
+		# (`_update_stuck`): the index moves on, the arrival is not counted, and
+		# the run's log says where.
+		var arrived: bool = true
+		if use_navigation and nav_agent != null:
+			arrived = path_reaches_point(nav_agent.get_final_position(),
+				nav_agent.target_position, nav_agent.target_desired_distance)
 		_route_index += 1
-		_route_reached += 1
+		if arrived:
+			_route_reached += 1
+		else:
+			var short_end: Vector3 = nav_agent.get_final_position()
+			get_tree().call_group(LT_Const.GROUP_METRICS, "record_event",
+				"RoutePointUnreachable", {"source": body.name, "index": _route_index - 1,
+					"short_m": snappedf(short_end.distance_to(nav_agent.target_position), 0.01),
+					"position": [short_end.x, short_end.y, short_end.z]})
 		# a route point reached restarts the stuck window (0.28.1)
 		_restart_stuck_window()
 		get_tree().call_group(LT_Const.GROUP_METRICS, "record_event",
@@ -314,6 +335,17 @@ func _velocity_on_mesh(velocity: Vector3, delta: float) -> Vector3:
 ## (roadmap 128); this asks it.
 static func route_walked(reached: int, total: int) -> bool:
 	return total > 0 and reached >= total
+
+
+## AN ARRIVAL IS AT THE POINT (0.32.0, factory roadmap 246): the path the
+## navigation server returned ends within ``tolerance`` of the route point.
+## `is_navigation_finished()` is true at the end of that path, and for a
+## point the network does not reach the path ends at the closest point it
+## does. Godot asks the same of `get_final_position()` and
+## `target_desired_distance` as `is_target_reachable()`; static here so it
+## is tested without a scene.
+static func path_reaches_point(path_end: Vector3, point: Vector3, tolerance: float) -> bool:
+	return path_end.distance_to(point) <= tolerance
 
 
 ## True once this bot's route has ended with every point reached.
