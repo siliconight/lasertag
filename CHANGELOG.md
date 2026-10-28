@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.32.1] - the MIT licence travels
+
+The walker's call, 2026-10-26: every factory repo carries MIT. This repo's `LICENSE` was committed that day, after the tag factory 1.41.0 named; factory 1.42.0 packaged that tag and so shipped without it. This release carries it, and changes nothing else.
+
 ## [0.32.0] - an arrival is at the point, not at the end of a path that stops short of it
 
 ### Why now
